@@ -1,18 +1,39 @@
-const MAX_MESSAGES = 10;
-const LIFETIME_MS = 50_000;
+const MAX_CLASSIC = 10;
+const MAX_AIR = 10;
+const LIFETIME_CLASSIC = 50_000;
+const LIFETIME_AIR = 26_000;
 
-type MsgEl = { el: HTMLElement; bornAt: number; raf: number; dead: boolean };
+export type ChatMode = "air" | "classic";
+
+type MsgEl = {
+  el: HTMLElement;
+  bornAt: number;
+  raf: number;
+  dead: boolean;
+  mode: ChatMode;
+  drift: number; // px horizontal drift over life (air)
+  rise: number; // vh vertical rise over life (air)
+};
 
 export class Chat {
   private log: HTMLElement;
+  private air: HTMLElement;
   private input: HTMLInputElement;
   private form: HTMLFormElement;
   private onSend: (text: string) => void;
   private messages: MsgEl[] = [];
   private selfId = "";
+  private mode: ChatMode = "air";
 
-  constructor(log: HTMLElement, input: HTMLInputElement, form: HTMLFormElement, onSend: (text: string) => void) {
+  constructor(
+    log: HTMLElement,
+    air: HTMLElement,
+    input: HTMLInputElement,
+    form: HTMLFormElement,
+    onSend: (text: string) => void,
+  ) {
     this.log = log;
+    this.air = air;
     this.input = input;
     this.form = form;
     this.onSend = onSend;
@@ -26,6 +47,14 @@ export class Chat {
     this.selfId = visitorId;
   }
 
+  setMode(mode: ChatMode): void {
+    if (mode === this.mode) return;
+    this.mode = mode;
+    // Ephemeral: clear whatever is currently showing on switch.
+    for (const m of [...this.messages]) this.kill(m);
+    document.documentElement.dataset.chat = mode;
+  }
+
   private submit(): void {
     const text = this.input.value.trim();
     if (!text) return;
@@ -34,6 +63,11 @@ export class Chat {
   }
 
   add(visitorId: string, text: string, ts: number): void {
+    if (this.mode === "air") this.addAir(visitorId, text);
+    else this.addClassic(visitorId, text, ts);
+  }
+
+  private addClassic(visitorId: string, text: string, ts: number): void {
     const el = document.createElement("div");
     el.className = "chat-msg" + (visitorId === this.selfId ? " is-self" : "");
     const tsSpan = document.createElement("span");
@@ -43,12 +77,38 @@ export class Chat {
     span.textContent = text;
     el.appendChild(tsSpan);
     el.appendChild(span);
-    // column-reverse: newest at bottom. Append to end of container = bottom visually.
     this.log.appendChild(el);
-    const entry: MsgEl = { el, bornAt: performance.now(), raf: 0, dead: false };
+    const entry: MsgEl = { el, bornAt: performance.now(), raf: 0, dead: false, mode: "classic", drift: 0, rise: 0 };
     this.messages.push(entry);
-    this.prune();
+    while (this.messages.length > MAX_CLASSIC) {
+      const oldest = this.messages.shift();
+      if (oldest) this.kill(oldest);
+    }
     this.animate(entry);
+  }
+
+  private addAir(visitorId: string, text: string): void {
+    const el = document.createElement("div");
+    el.className = "air-msg" + (visitorId === this.selfId ? " is-self" : "");
+    el.textContent = text;
+    const leftPct = 50 + (Math.random() * 2 - 1) * 20; // 30%..70%
+    el.style.left = leftPct + "%";
+    this.air.appendChild(el);
+    const entry: MsgEl = {
+      el,
+      bornAt: performance.now(),
+      raf: 0,
+      dead: false,
+      mode: "air",
+      drift: (Math.random() * 2 - 1) * 8,
+      rise: 14 + Math.random() * 7,
+    };
+    this.messages.push(entry);
+    while (this.messages.length > MAX_AIR) {
+      const oldest = this.messages.shift();
+      if (oldest) this.kill(oldest);
+    }
+    this.animateAir(entry);
   }
 
   private fmtTime(ts: number): string {
@@ -58,22 +118,36 @@ export class Chat {
     return `${hh}:${mm}`;
   }
 
-  private prune(): void {
-    while (this.messages.length > MAX_MESSAGES) {
-      const oldest = this.messages.shift();
-      if (oldest) this.kill(oldest);
-    }
-  }
-
   private animate(entry: MsgEl): void {
     const tick = () => {
       if (entry.dead) return;
       const age = performance.now() - entry.bornAt;
-      const p = Math.min(age / LIFETIME_MS, 1);
-      const opacity = 1 - p;
-      const ty = -p * 14;
-      entry.el.style.opacity = String(opacity);
-      entry.el.style.transform = `translateY(${ty}px)`;
+      const p = Math.min(age / LIFETIME_CLASSIC, 1);
+      entry.el.style.opacity = String(1 - p);
+      entry.el.style.transform = `translateY(${-p * 14}px)`;
+      if (p >= 1) {
+        this.kill(entry);
+        return;
+      }
+      entry.raf = requestAnimationFrame(tick);
+    };
+    entry.raf = requestAnimationFrame(tick);
+  }
+
+  private animateAir(entry: MsgEl): void {
+    const tick = () => {
+      if (entry.dead) return;
+      const age = performance.now() - entry.bornAt;
+      const p = Math.min(age / LIFETIME_AIR, 1);
+      // ease in, hold, ease out
+      let op: number;
+      if (p < 0.12) op = p / 0.12;
+      else if (p > 0.58) op = (1 - p) / 0.42;
+      else op = 1;
+      const ty = -p * entry.rise; // vh, rises upward
+      const tx = entry.drift * p; // gentle horizontal sway
+      entry.el.style.opacity = String(Math.max(0, op));
+      entry.el.style.transform = `translate(calc(-50% + ${tx}px), ${ty}vh)`;
       if (p >= 1) {
         this.kill(entry);
         return;

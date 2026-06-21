@@ -41,8 +41,10 @@
 
     <div class="hud" aria-live="polite">
       <div class="hud-count" id="hud-count">01</div>
-      <div class="hud-label">PRÉSENT(E)S</div>
+      <div class="hud-label" data-i18n="present">PRESENT</div>
     </div>
+
+    <div id="chat-air" class="chat-air" aria-live="polite"></div>
 
     <section id="chat" class="chat" aria-label="chat éphémère" aria-live="polite">
       <div id="chat-log" class="chat-log"></div>
@@ -52,26 +54,132 @@
           class="chat-input"
           type="text"
           maxlength="140"
-          placeholder="murmurer…"
-          aria-label="murmurer"
+          placeholder="whisper…"
+          data-i18n-ph="whisper"
+          data-i18n-aria="whisper"
           enterkeyhint="send"
         />
       </form>
     </section>
 
-    <div class="settings" id="settings">
+    <div class="radio" id="radio">
       <button
-        class="settings-toggle"
-        id="motion-btn"
+        class="radio-power"
+        id="radio-power"
         type="button"
-        role="switch"
-        aria-checked="true"
-        aria-label="Animations"
+        aria-pressed="false"
+        data-i18n-aria="aria_radio"
+        aria-label="Shared radio — on/off for everyone"
       >
-        <span class="settings-led" aria-hidden="true"></span>
-        <span class="settings-label">ANIMATIONS</span>
+        <span class="radio-led" aria-hidden="true"></span>
+        <span class="radio-label">RADIO</span>
+      </button>
+      <button
+        class="icon-btn radio-mute"
+        id="radio-mute"
+        type="button"
+        aria-pressed="false"
+        aria-label="Couper le son (local)"
+        hidden
+      >
+        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+          <path d="M4 9.5v5h3.5L12 18V6L7.5 9.5H4z" fill="currentColor" />
+          <path class="snd-wave" d="M15.5 8.8a4.5 4.5 0 0 1 0 6.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+          <path class="snd-slash" d="M3.5 3.5l17 17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+        </svg>
       </button>
     </div>
+
+    <div class="actions">
+      <button
+        class="icon-btn share-btn"
+        id="share-btn"
+        type="button"
+        data-i18n-aria="aria_share"
+        aria-label="Share the link"
+      >
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="6" cy="12" r="2.4" />
+          <circle cx="17" cy="6" r="2.4" />
+          <circle cx="17" cy="18" r="2.4" />
+          <path d="M8.1 10.9l6.8-3.8M8.1 13.1l6.8 3.8" />
+        </svg>
+      </button>
+      <button
+        class="icon-btn settings-open"
+        id="settings-open"
+        type="button"
+        aria-haspopup="dialog"
+        data-i18n-aria="aria_settings"
+        aria-label="Settings"
+      >
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true">
+          <line x1="4" y1="8.5" x2="20" y2="8.5" />
+          <line x1="4" y1="15.5" x2="20" y2="15.5" />
+          <circle cx="14" cy="8.5" r="2.5" fill="var(--bg)" />
+          <circle cx="9" cy="15.5" r="2.5" fill="var(--bg)" />
+        </svg>
+      </button>
+    </div>
+
+    <div class="modal-backdrop" id="modal-backdrop">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <div class="modal-head">
+          <span class="modal-title" id="modal-title" data-i18n="settings_title">SETTINGS</span>
+          <button class="icon-btn modal-close" id="modal-close" type="button" data-i18n-aria="aria_close" aria-label="Close">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="setting-row">
+            <span class="setting-name" data-i18n="s_motion">ANIMATIONS</span>
+            <button class="switch" id="motion-btn" type="button" role="switch" aria-checked="true" data-i18n-aria="s_motion" aria-label="Animations">
+              <span class="switch-knob" aria-hidden="true"></span>
+            </button>
+          </div>
+          <div class="setting-row">
+            <span class="setting-name" data-i18n="s_floating">FLOATING MESSAGES</span>
+            <button class="switch" id="chatmode-btn" type="button" role="switch" aria-checked="true" data-i18n-aria="s_floating" aria-label="Floating messages">
+              <span class="switch-knob" aria-hidden="true"></span>
+            </button>
+          </div>
+          <div class="setting-row">
+            <span class="setting-name" data-i18n="s_fire">FIRE CRACKLE</span>
+            <button class="switch" id="fire-btn" type="button" role="switch" aria-checked="true" data-i18n-aria="s_fire" aria-label="Fire crackle">
+              <span class="switch-knob" aria-hidden="true"></span>
+            </button>
+          </div>
+          <div class="setting-row">
+            <span class="setting-name" data-i18n="s_language">LANGUAGE</span>
+            <div class="lang-seg" id="lang-seg" role="group" aria-label="Language">
+              <button class="lang-opt" data-lang="fr" type="button">FR</button>
+              <button class="lang-opt" data-lang="en" type="button">EN</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="gate" id="gate" hidden>
+      <form class="gate-form" id="gate-form" autocomplete="off">
+        <div class="gate-title" data-i18n="gate_title">This space is protected</div>
+        <input
+          class="gate-input"
+          id="gate-input"
+          type="password"
+          placeholder="password"
+          data-i18n-ph="password"
+          data-i18n-aria="password"
+          aria-label="password"
+        />
+        <button class="gate-btn" id="gate-btn" type="submit" data-i18n="enter">Enter</button>
+        <div class="gate-error" id="gate-error" data-i18n="wrong_password" hidden>Wrong password</div>
+      </form>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
     <script type="module" src="/main.ts"></script>
   </body>

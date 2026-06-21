@@ -1,24 +1,46 @@
 import { Scene } from "./scene";
-import { Chat } from "./chat";
+import { Chat, type ChatMode } from "./chat";
 import { DayBar } from "./daybar";
 import { themeAt } from "./theme";
+import { Radio, RADIO_URL } from "./radio";
+import { FireSound, FIRE_SOUND_URL } from "./ambient";
+import { detectLang, setLang, applyI18n, t, type Lang } from "./i18n";
 
 const canvas = document.getElementById("scene") as HTMLCanvasElement;
 const hudCount = document.getElementById("hud-count") as HTMLElement;
 const chatLog = document.getElementById("chat-log") as HTMLElement;
+const chatAir = document.getElementById("chat-air") as HTMLElement;
 const chatInput = document.getElementById("chat-input") as HTMLInputElement;
 const chatForm = document.getElementById("chat-form") as HTMLFormElement;
 const daybarEl = document.getElementById("daybar") as HTMLElement;
 const motionBtn = document.getElementById("motion-btn") as HTMLButtonElement;
+const chatmodeBtn = document.getElementById("chatmode-btn") as HTMLButtonElement;
+const radioPower = document.getElementById("radio-power") as HTMLButtonElement;
+const radioMute = document.getElementById("radio-mute") as HTMLButtonElement;
+const settingsOpen = document.getElementById("settings-open") as HTMLButtonElement;
+const modalBackdrop = document.getElementById("modal-backdrop") as HTMLElement;
+const modalClose = document.getElementById("modal-close") as HTMLButtonElement;
+const fireBtn = document.getElementById("fire-btn") as HTMLButtonElement;
+const langSeg = document.getElementById("lang-seg") as HTMLElement;
+const shareBtn = document.getElementById("share-btn") as HTMLButtonElement;
+const gate = document.getElementById("gate") as HTMLElement;
+const gateForm = document.getElementById("gate-form") as HTMLFormElement;
+const gateInput = document.getElementById("gate-input") as HTMLInputElement;
+const gateError = document.getElementById("gate-error") as HTMLElement;
+const toast = document.getElementById("toast") as HTMLElement;
 
 type PresenceItem = { visitorId: string; seatIndex: number; connectedAt: number };
 
 const scene = new Scene(canvas);
-const chat = new Chat(chatLog, chatInput, chatForm, (text) => {
+const chat = new Chat(chatLog, chatAir, chatInput, chatForm, (text) => {
   safeSend({ v: 1, type: "chat:send", text });
 });
 
 const daybar = new DayBar(daybarEl);
+const radio = new Radio(RADIO_URL, radioPower, radioMute, (on) => {
+  safeSend({ v: 1, type: "radio:set", on });
+});
+const fire = new FireSound(FIRE_SOUND_URL);
 
 const presence = new Map<string, PresenceItem>();
 let selfId = "";
@@ -68,11 +90,13 @@ function connect() {
 
     switch (msg.type) {
       case "init": {
+        hideGate();
         selfId = msg.visitorId;
         if (typeof msg.now === "number") {
           serverOffset = msg.now - Date.now();
           tickTime();
         }
+        if (typeof msg.radio === "boolean") radio.setGlobal(msg.radio);
         chat.setSelf(selfId);
         presence.clear();
         for (const p of msg.presence ?? []) {
@@ -103,14 +127,24 @@ function connect() {
         chat.add(msg.visitorId, msg.text, msg.ts);
         break;
       }
+      case "radio:state": {
+        radio.setGlobal(msg.on === true);
+        break;
+      }
+      case "auth:required": {
+        if (gatePassword) safeSend({ v: 1, type: "auth", password: gatePassword });
+        else showGate(false);
+        break;
+      }
       case "error": {
-        // minimal: brief input flash via placeholder
-        if (msg.code === "rate_limited") {
-          chatInput.placeholder = "// doucement…";
-          setTimeout(() => (chatInput.placeholder = "murmurer…"), 1500);
+        if (msg.code === "auth_failed") {
+          gatePassword = "";
+          gateInput.value = "";
+          showGate(true);
+        } else if (msg.code === "rate_limited") {
+          flashPlaceholder("err_slow");
         } else if (msg.code === "too_long") {
-          chatInput.placeholder = "// trop long…";
-          setTimeout(() => (chatInput.placeholder = "murmurer…"), 1500);
+          flashPlaceholder("err_long");
         }
         break;
       }
@@ -138,6 +172,29 @@ function safeSend(obj: unknown) {
   }
 }
 
+function flashPlaceholder(key: string): void {
+  chatInput.placeholder = t(key);
+  setTimeout(() => (chatInput.placeholder = t("whisper")), 1500);
+}
+
+// Password gate — only seen when the server runs with ACCESS_PASSWORD set.
+let gatePassword = "";
+function showGate(error: boolean): void {
+  gateError.hidden = !error;
+  gate.hidden = false;
+  gateInput.focus();
+}
+function hideGate(): void {
+  gate.hidden = true;
+  gateError.hidden = true;
+}
+gateForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  gatePassword = gateInput.value;
+  gateError.hidden = true;
+  safeSend({ v: 1, type: "auth", password: gatePassword });
+});
+
 // Reduced-motion: OS preference by default, overridable via the config panel.
 const RM_KEY = "campfire:reduced";
 function resolveReduced(): boolean {
@@ -157,6 +214,99 @@ motionBtn.addEventListener("click", () => {
   localStorage.setItem(RM_KEY, reduced ? "1" : "0");
   applyReduced(reduced);
 });
+
+// Chat display mode: "air" (default, messages drift in the scene) or "classic".
+const CHAT_KEY = "campfire:chatmode";
+let chatMode: ChatMode = localStorage.getItem(CHAT_KEY) === "classic" ? "classic" : "air";
+function applyChatMode(m: ChatMode): void {
+  chatmodeBtn.setAttribute("aria-checked", String(m === "air"));
+  chat.setMode(m);
+}
+applyChatMode(chatMode);
+chatmodeBtn.addEventListener("click", () => {
+  chatMode = chatMode === "air" ? "classic" : "air";
+  localStorage.setItem(CHAT_KEY, chatMode);
+  applyChatMode(chatMode);
+});
+
+// Settings modal
+function openModal(): void {
+  modalBackdrop.classList.add("open");
+  modalClose.focus();
+}
+function closeModal(): void {
+  modalBackdrop.classList.remove("open");
+  settingsOpen.focus();
+}
+settingsOpen.addEventListener("click", openModal);
+modalClose.addEventListener("click", closeModal);
+modalBackdrop.addEventListener("click", (e) => {
+  if (e.target === modalBackdrop) closeModal();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && modalBackdrop.classList.contains("open")) closeModal();
+});
+
+// Fire crackle ambience
+function applyFire(on: boolean): void {
+  fireBtn.setAttribute("aria-checked", String(on));
+}
+applyFire(fire.isEnabled());
+fireBtn.addEventListener("click", () => {
+  const on = !fire.isEnabled();
+  fire.setEnabled(on);
+  applyFire(on);
+});
+
+// Share the link
+let toastTimer = 0;
+function showToast(text: string): void {
+  toast.textContent = text;
+  toast.hidden = false;
+  requestAnimationFrame(() => toast.classList.add("show"));
+  clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => {
+    toast.classList.remove("show");
+    setTimeout(() => (toast.hidden = true), 260);
+  }, 1800);
+}
+shareBtn.addEventListener("click", async () => {
+  const url = location.href;
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: "campfire", text: t("share_text"), url });
+      return;
+    } catch {
+      /* cancelled — fall through to clipboard */
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast(t("link_copied"));
+  } catch {
+    showToast(url);
+  }
+});
+
+// Language (FR / EN, English fallback)
+const langOpts = Array.from(langSeg.querySelectorAll<HTMLButtonElement>(".lang-opt"));
+function applyLang(l: Lang): void {
+  setLang(l);
+  localStorage.setItem("campfire:lang", l);
+  applyI18n();
+  chatInput.placeholder = t("whisper");
+  radio.refresh();
+  for (const b of langOpts) {
+    const active = b.dataset.lang === l;
+    b.classList.toggle("active", active);
+    b.setAttribute("aria-pressed", String(active));
+  }
+  tickTime(); // refresh daybar phase label immediately
+}
+for (const b of langOpts) {
+  b.addEventListener("click", () => applyLang(b.dataset.lang as Lang));
+}
+applyLang(detectLang());
 
 tickTime();
 setInterval(tickTime, 1000);

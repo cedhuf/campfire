@@ -1,4 +1,5 @@
 import { rgb, type Theme } from "./theme";
+import { t } from "./i18n";
 
 // Top progress bar mapped to the day (0h -> 24h), with a marker tracking "now"
 // and a tiny HH:MM / phase readout. Colors follow the active theme.
@@ -26,7 +27,7 @@ export class DayBar {
     const hh = String(Math.floor(totalMin / 60)).padStart(2, "0");
     const mm = String(totalMin % 60).padStart(2, "0");
     this.timeEl.textContent = `${hh}:${mm}`;
-    this.phaseEl.textContent = theme.phase;
+    this.phaseEl.textContent = t("phase_" + theme.phase);
 
     this.root.style.setProperty("--day-accent", rgb(theme.marker));
     this.root.style.setProperty("--day-glow", rgb(theme.marker, 0.5));

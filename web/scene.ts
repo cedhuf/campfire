@@ -50,7 +50,7 @@ type Star = {
 };
 
 const TRAIL_LEN = 24;
-const EMBER_COUNT = 16;
+const EMBER_COUNT = 30;
 const STAR_COUNT = 80;
 const SEAT_RADIUS = 17;
 const OSC_AMP_X = 4;
@@ -250,14 +250,14 @@ export class Scene {
   private spawnEmber(): Ember {
     const v = this.vmin;
     return {
-      x: this.cx + (Math.random() - 0.5) * 4 * v,
-      y: this.cy + (Math.random() - 0.5) * 2 * v,
-      vx: (Math.random() - 0.5) * 0.3 * v,
-      vy: -(0.4 + Math.random() * 0.8) * v,
-      life: 50 + Math.random() * 70,
+      x: this.cx + (Math.random() - 0.5) * 3 * v, // tighter column
+      y: this.cy + Math.random() * 1.5 * v,
+      vx: (Math.random() - 0.5) * 0.25 * v,
+      vy: -(0.5 + Math.random() * 1.0) * v,
+      life: 45 + Math.random() * 70,
       maxLife: 0,
-      size: 0.6 + Math.random() * 1.4,
-      hue: 12 + Math.random() * 20,
+      size: 0.5 + Math.random() * 1.1,
+      hue: 14 + Math.random() * 22,
     };
   }
 
@@ -321,22 +321,37 @@ export class Scene {
     ctx.fill();
   }
 
-  private drawCampfireCore(t: number, boost: number): void {
+  // Abstract glowing source: soft additive radial cores with a gentle flicker.
+  // No logs/flames — keeps it in the app's minimal, particle/glow language.
+  private drawCore(t: number, boost: number): void {
     const ctx = this.ctx;
+    const v = this.vmin;
+    const x = this.cx;
+    const y = this.cy;
     const flick = this.flicker(t);
-    const coreR = 2.2 * this.vmin * boost;
-    ctx.fillStyle = `rgba(255, 90, 54, ${0.25 + 0.12 * flick})`;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+
+    const r1 = (4.6 + 0.5 * flick) * v * boost;
+    const g1 = ctx.createRadialGradient(x, y, 0, x, y, r1);
+    g1.addColorStop(0, `rgba(255, 170, 100, ${0.42 + 0.12 * flick})`);
+    g1.addColorStop(0.5, `rgba(255, 110, 60, ${0.18 + 0.07 * flick})`);
+    g1.addColorStop(1, "rgba(255, 90, 54, 0)");
+    ctx.fillStyle = g1;
     ctx.beginPath();
-    ctx.arc(this.cx, this.cy, coreR * 1.6, 0, Math.PI * 2);
+    ctx.arc(x, y, r1, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = `rgba(255, 130, 70, ${0.45 + 0.2 * flick})`;
+
+    const r2 = (1.7 + 0.3 * flick) * v * boost;
+    const g2 = ctx.createRadialGradient(x, y - 0.4 * v, 0, x, y, r2);
+    g2.addColorStop(0, `rgba(255, 240, 205, ${0.5 + 0.16 * flick})`);
+    g2.addColorStop(1, "rgba(255, 200, 130, 0)");
+    ctx.fillStyle = g2;
     ctx.beginPath();
-    ctx.arc(this.cx, this.cy, coreR, 0, Math.PI * 2);
+    ctx.arc(x, y, r2, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = `rgba(255, 200, 130, ${0.6 + 0.2 * flick})`;
-    ctx.beginPath();
-    ctx.arc(this.cx, this.cy, coreR * 0.5, 0, Math.PI * 2);
-    ctx.fill();
+
+    ctx.restore();
   }
 
   private updateAndDrawEmbers(): void {
@@ -433,10 +448,10 @@ export class Scene {
 
     this.drawWaves();
     this.drawCampfireGlow(t, boost);
+    this.drawCore(t, boost);
     this.ensureEmbers();
     this.drawOscillators(globalSpeed, globalAmp);
     this.updateAndDrawEmbers();
-    this.drawCampfireCore(t, boost);
   }
 
   private renderStatic() {
@@ -448,7 +463,7 @@ export class Scene {
 
     this.drawWaves();
     this.drawCampfireGlow(0, boost);
-    this.drawCampfireCore(0, boost);
+    this.drawCore(0, boost);
 
     const ampX = OSC_AMP_X * this.vmin;
     const ampY = OSC_AMP_Y * this.vmin;

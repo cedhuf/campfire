@@ -9,14 +9,22 @@ import {
   generateVisitorId,
 } from "./presence";
 import { register, unregister, handleSend, sanitize, broadcast } from "./chat";
+import type { ServerWebSocket } from "bun";
 
 const PORT = Number(process.env.PORT ?? 3000);
 // Trust X-Forwarded-For for per-IP limits. Keep true behind a trusted reverse
 // proxy; set false when the server is directly exposed (XFF is then spoofable).
 const TRUST_PROXY = (process.env.TRUST_PROXY ?? "true") !== "false";
+// Optional access password (off when empty). When set, a client must authenticate
+// over the WebSocket before being admitted to presence/chat. In-memory only.
+const ACCESS_PASSWORD = process.env.ACCESS_PASSWORD ?? "";
 const DIST = new URL("../dist/", import.meta.url);
 
-type ConnData = { visitorId: string; ip: string; admitted: boolean };
+// Shared radio state: a single switch for everyone. Anyone can turn it on/off,
+// and the change is broadcast to all (one cuts -> all cut). Ephemeral, in-memory.
+let radioOn = false;
+
+type ConnData = { visitorId: string; ip: string; admitted: boolean; attempts: number };
 
 function clientIp(req: Request, server: Bun.Server<ConnData>): string {
   if (TRUST_PROXY) {
@@ -35,13 +43,32 @@ function publishPresence(obj: unknown): void {
   server.publish("presence", JSON.stringify(obj));
 }
 
+// Reserve a slot, seat the visitor, and announce their presence. Called on
+// connect (no password) or after a successful auth (password set).
+function admit(ws: ServerWebSocket<ConnData>): void {
+  const { visitorId, ip } = ws.data;
+  const reserve = tryReserve(ip);
+  if (!reserve.ok) {
+    sendJson(ws, { v: 1, type: "error", code: reserve.code, msg: "too many connections" });
+    ws.close(1013);
+    return;
+  }
+  ws.data.admitted = true;
+  const seatIndex = assignSeat();
+  add(visitorId, seatIndex);
+  register(ws, visitorId);
+  sendJson(ws, { v: 1, type: "init", visitorId, seatIndex, now: Date.now(), radio: radioOn, presence: snapshot() });
+  publishPresence({ v: 1, type: "presence:join", visitorId, seatIndex });
+  ws.subscribe("presence");
+}
+
 const server = Bun.serve<ConnData>({
   port: PORT,
   fetch(req, server) {
     const url = new URL(req.url);
     if (url.pathname === "/ws") {
       const ok = server.upgrade(req, {
-        data: { visitorId: generateVisitorId(), ip: clientIp(req, server), admitted: false },
+        data: { visitorId: generateVisitorId(), ip: clientIp(req, server), admitted: false, attempts: 0 },
       });
       return ok ? undefined : new Response("upgrade failed", { status: 400 });
     }
@@ -49,24 +76,10 @@ const server = Bun.serve<ConnData>({
   },
   websocket: {
     open(ws) {
-      const { visitorId, ip } = ws.data;
-      const reserve = tryReserve(ip);
-      if (!reserve.ok) {
-        sendJson(ws, { v: 1, type: "error", code: reserve.code, msg: "too many connections" });
-        ws.close(1013);
-        return;
-      }
-      ws.data.admitted = true;
-      const seatIndex = assignSeat();
-      add(visitorId, seatIndex);
-      register(ws, visitorId);
-
-      sendJson(ws, { v: 1, type: "init", visitorId, seatIndex, now: Date.now(), presence: snapshot() });
-      publishPresence({ v: 1, type: "presence:join", visitorId, seatIndex });
-      ws.subscribe("presence");
+      if (ACCESS_PASSWORD === "") admit(ws);
+      else sendJson(ws, { v: 1, type: "auth:required" });
     },
     message(ws, msg) {
-      if (!ws.data.admitted) return;
       let parsed: unknown;
       try {
         parsed = JSON.parse(typeof msg === "string" ? msg : new TextDecoder().decode(msg));
@@ -74,9 +87,31 @@ const server = Bun.serve<ConnData>({
         return;
       }
       if (typeof parsed !== "object" || parsed === null) return;
-      const p = parsed as { type?: string; text?: unknown };
-      if (p.type !== "chat:send") return;
+      const p = parsed as { type?: string; text?: unknown; on?: unknown; password?: unknown };
 
+      if (!ws.data.admitted) {
+        if (p.type === "auth" && ACCESS_PASSWORD !== "") {
+          if (typeof p.password === "string" && p.password === ACCESS_PASSWORD) {
+            admit(ws);
+          } else {
+            ws.data.attempts++;
+            sendJson(ws, { v: 1, type: "error", code: "auth_failed", msg: "wrong password" });
+            if (ws.data.attempts >= 5) ws.close(1008);
+          }
+        }
+        return;
+      }
+
+      if (p.type === "radio:set") {
+        const on = p.on === true;
+        if (on !== radioOn) {
+          radioOn = on;
+          publishPresence({ v: 1, type: "radio:state", on: radioOn });
+        }
+        return;
+      }
+
+      if (p.type !== "chat:send") return;
       const result = handleSend(ws, p.text);
       if (!result.ok) {
         sendJson(ws, {

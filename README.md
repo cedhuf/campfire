@@ -60,6 +60,7 @@ production pass them through your container runtime. Copy `.env.example` to `.en
 | `MAX_CONNECTIONS_PER_IP`  | `10`    | Max simultaneous connections per IP.                               |
 | `MSG_MAX_LENGTH`          | `140`   | Max chat message length (chars); longer messages are rejected.     |
 | `MSG_RATE_LIMIT_MS`       | `2200`  | Minimum delay between two messages from the same connection (ms).  |
+| `ACCESS_PASSWORD`         | _(empty)_ | Optional. When set, visitors must enter this password to join.    |
 
 ## Container image
 
