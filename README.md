@@ -11,15 +11,20 @@ vanishes when the process restarts: that's a feature, not a limitation.
 ## Features
 
 - **Real-time presence** over WebSocket: oscillating silhouettes around the fire + a live counter.
-- **Ephemeral chat**: zero persistence, progressive fade-out, capped at 10 visible lines.
-- **Ambient canvas scene**: fire, embers, waves, and a starfield.
+- **Ephemeral chat, two display modes**: messages drifting **in the air** around the fire
+  (default) or a classic bottom log. Zero persistence either way.
+- **Shared lofi radio**: a single switch synced across everyone (one toggles it for all), with a
+  per-visitor local mute — plus a local **campfire crackle** ambience.
+- **Ambient canvas scene**: a glowing fire, rising embers, waves, and a starfield visible all day
+  (faint at midday, full at night).
 - **Day/night cycle** driven by **server time** (consistent for all visitors, derived in UTC):
-  a 0h→24h progress bar at the top, plus a theme that warms at dawn/dusk, cools to deep blue at
-  midday, and brings out the stars at night.
-- **Minimal settings panel**: a `reduced-motion` toggle (defaults to the OS preference, with a
-  persistent override in `localStorage`).
-- **Accessibility**: respects `prefers-reduced-motion` (static scene, no flicker) and uses
-  `aria-live` on the chat.
+  a 0h→24h progress bar at the top, plus a theme that warms at dawn/dusk and cools to deep blue
+  at midday.
+- **Settings modal**: reduced-motion, chat mode, fire ambience, and **language (FR/EN)** — all
+  persisted locally.
+- **Share** the link (Web Share API / clipboard copy) to invite others to the same fire.
+- **Optional password gate** (`ACCESS_PASSWORD`, off by default).
+- **Accessibility**: respects `prefers-reduced-motion`, `aria-live` on the chat, keyboard focus.
 
 ## Stack
 
@@ -62,6 +67,12 @@ production pass them through your container runtime. Copy `.env.example` to `.en
 | `MSG_RATE_LIMIT_MS`       | `2200`  | Minimum delay between two messages from the same connection (ms).  |
 | `ACCESS_PASSWORD`         | _(empty)_ | Optional. When set, visitors must enter this password to join.    |
 
+### Audio
+
+The campfire crackle lives in `static/` (`sounds_fx/`), served via Vite's public dir and
+streamed/looped locally per visitor. The shared radio points at a public lofi stream by default —
+change `RADIO_URL` in [web/radio.ts](web/radio.ts) to use another station (must be HTTPS).
+
 ## Container image
 
 A multi-arch-ready image is built and published to the GitHub Container Registry on every push
@@ -101,9 +112,9 @@ bun test/ws-it.ts                   # init, presence, rate-limit, sanitization, 
 
 Every message carries `"v": 1`.
 
-**Server → client**: `init` (visitorId, seatIndex, now, presence), `presence:join`,
-`presence:leave`, `chat:message`, `error`.
-**Client → server**: `chat:send`.
+**Server → client**: `init` (visitorId, seatIndex, now, radio, presence), `presence:join`,
+`presence:leave`, `chat:message`, `radio:state`, `error`, and `auth:required` (when a password is set).
+**Client → server**: `chat:send`, `radio:set`, and `auth` (password).
 
 Best-effort broadcast with no acknowledgement or replay — consistent with the ephemeral design.
 
