@@ -22,24 +22,39 @@ const DIST = new URL("../dist/", import.meta.url);
 
 // Resolve the timezone offset (minutes east of UTC) we should anchor the
 // day/night cycle on. Honors the TZ env var (e.g. TZ=Europe/Paris) via
-// Intl.DateTimeFormat so it works regardless of the process wall-clock tz.
-// Falls back to the process local offset when TZ is unset.
+// Intl.DateTimeFormat so it works regardless of the process wall-clock tz
+// (Docker containers default to UTC). Falls back to the process local
+// offset when TZ is unset. Uses format-and-diff instead of
+// timeZoneName:"shortOffset" (not available on all ICU builds, e.g. slim
+// container images).
 function tzOffsetMinutes(): number {
   const tz = process.env.TZ;
   if (tz) {
     try {
+      const now = new Date();
       const fmt = new Intl.DateTimeFormat("en-US", {
         timeZone: tz,
-        timeZoneName: "shortOffset",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
       });
-      const part = fmt.formatToParts(new Date()).find((p) => p.type === "timeZoneName")?.value;
-      const m = part?.match(/GMT([+-])(\d{1,2})(?::(\d{2}))?/);
-      if (m) {
-        const sign = m[1] === "+" ? 1 : -1;
-        const hours = parseInt(m[2]!, 10);
-        const mins = m[3] ? parseInt(m[3], 10) : 0;
-        return sign * (hours * 60 + mins);
-      }
+      const parts = fmt.formatToParts(now);
+      const map: Record<string, string> = {};
+      for (const p of parts) if (p.type !== "literal") map[p.type] = p.value;
+      const asUTC = Date.UTC(
+        parseInt(map.year!, 10),
+        parseInt(map.month!, 10) - 1,
+        parseInt(map.day!, 10),
+        parseInt(map.hour!, 10) % 24,
+        parseInt(map.minute!, 10),
+        parseInt(map.second!, 10),
+      );
+      // Round to nearest minute to absorb DST half-hour edges.
+      return Math.round((asUTC - now.getTime()) / 60000);
     } catch {
       // invalid TZ string — fall through
     }
@@ -171,11 +186,27 @@ function serveStatic(pathname: string): Response {
   let path = pathname;
   if (path === "/" || path === "") path = "/index.html";
   const file = Bun.file(new URL("." + path, DIST));
-  if (file.size > 0) return new Response(file);
+  if (file.size > 0) {
+    const res = new Response(file);
+    // index.html must always be revalidated (it points at hashed asset names),
+    // while hashed assets under /assets/ are immutable and can be cached long.
+    if (path === "/index.html") {
+      res.headers.set("Cache-Control", "no-cache, must-revalidate");
+    } else if (path.startsWith("/assets/")) {
+      res.headers.set("Cache-Control", "public, max-age=31536000, immutable");
+    } else {
+      res.headers.set("Cache-Control", "no-cache");
+    }
+    return res;
+  }
   // SPA fallback only for extensionless paths (no asset/route mismatch)
   if (!path.includes(".")) {
     const index = Bun.file(new URL("index.html", DIST));
-    if (index.size > 0) return new Response(index);
+    if (index.size > 0) {
+      const res = new Response(index);
+      res.headers.set("Cache-Control", "no-cache, must-revalidate");
+      return res;
+    }
   }
   return new Response("not found", { status: 404 });
 }
