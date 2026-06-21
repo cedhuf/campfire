@@ -1,0 +1,287 @@
+:root {
+  --bg: #060606;
+  --line-bright: rgba(255, 255, 255, 0.32);
+  --text-dim: rgba(232, 232, 232, 0.3);
+  --text: rgba(232, 232, 232, 0.62);
+  --accent: #ff5a36;
+  --accent-glow: rgba(255, 90, 54, 0.45);
+  --mono: ui-monospace, "JetBrains Mono", "SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+#scene {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  display: block;
+  z-index: 0;
+}
+
+/* Corner brackets */
+.bracket {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--line-bright);
+  z-index: 5;
+  pointer-events: none;
+}
+.bracket-tl { top: 18px; left: 18px; border-right: none; border-bottom: none; }
+.bracket-tr { top: 18px; right: 18px; border-left: none; border-bottom: none; }
+.bracket-bl { bottom: 18px; left: 18px; border-right: none; border-top: none; }
+.bracket-br { bottom: 18px; right: 18px; border-left: none; border-top: none; }
+
+/* Title block */
+.title-block {
+  position: absolute;
+  top: 36px;
+  left: 38px;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 6;
+  user-select: none;
+}
+.live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent-glow);
+  animation: pulse 1.8s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+
+/* HUD counter */
+.hud {
+  position: absolute;
+  top: 30px;
+  right: 38px;
+  text-align: right;
+  z-index: 6;
+  user-select: none;
+}
+.hud-count {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--accent);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.hud-label {
+  margin-top: 4px;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--text-dim);
+}
+
+/* Day progress bar (0h -> 24h), aligned with the corner-bracket frame */
+.daybar {
+  position: fixed;
+  top: 18px;
+  left: 38px;
+  right: 38px;
+  z-index: 6;
+  pointer-events: none;
+  user-select: none;
+  --day-accent: var(--accent);
+  --day-glow: var(--accent-glow);
+}
+.daybar-track {
+  position: relative;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+}
+/* ticks at 0 / 6 / 12 / 18 / 24h */
+.daybar-track::before {
+  content: "";
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--line-bright) 0 1px,
+    transparent 1px 25%
+  );
+  opacity: 0.4;
+}
+.daybar-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(to right, transparent, var(--day-accent));
+  box-shadow: 0 0 6px var(--day-glow);
+  transition: width 1s linear, background 3s linear;
+}
+.daybar-marker {
+  position: absolute;
+  top: 50%;
+  left: 0%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--day-accent);
+  box-shadow: 0 0 8px 1px var(--day-glow);
+  transition: left 1s linear, background 3s linear, box-shadow 3s linear;
+}
+.daybar-meta {
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.daybar-time {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.daybar-sep {
+  opacity: 0.5;
+}
+
+/* Config panel (reduced-motion toggle) */
+.settings {
+  position: fixed;
+  left: 34px;
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  z-index: 8;
+  user-select: none;
+}
+.settings-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--text-dim);
+  -webkit-tap-highlight-color: transparent;
+}
+.settings-toggle:hover .settings-label,
+.settings-toggle:focus-visible .settings-label {
+  color: var(--text);
+}
+.settings-toggle:focus-visible {
+  outline: 1px solid var(--line-bright);
+  outline-offset: 3px;
+}
+.settings-led {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent-glow);
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+.settings-toggle[aria-checked="false"] .settings-led {
+  background: rgba(255, 255, 255, 0.22);
+  box-shadow: none;
+}
+
+/* Chat overlay */
+.chat {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 16px;
+  padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  pointer-events: none;
+}
+.chat-log {
+  width: min(640px, 100%);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 6px;
+  max-height: 46dvh;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to top, #000 72%, transparent 100%);
+  mask-image: linear-gradient(to top, #000 72%, transparent 100%);
+  pointer-events: none;
+}
+.chat-msg {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text);
+  font-family: var(--mono);
+  word-break: break-word;
+  will-change: opacity, transform;
+  transition: opacity 50ms linear, transform 50ms linear;
+}
+.chat-msg .ts {
+  color: var(--text-dim);
+  margin-right: 6px;
+}
+.chat-msg.is-self {
+  color: var(--text);
+}
+.chat-form {
+  width: min(640px, 100%);
+  pointer-events: auto;
+  margin: 0;
+}
+.chat-input {
+  width: 100%;
+  height: 44px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  caret-color: var(--accent);
+  text-align: center;
+}
+.chat-input::placeholder {
+  color: var(--text-dim);
+  opacity: 1;
+}
+.chat-input:focus {
+  background: rgba(255, 90, 54, 0.04);
+}
+
+:root.reduced .live-dot { animation: none; opacity: 0.8; }
+:root.reduced .daybar-fill,
+:root.reduced .daybar-marker { transition: none; }
+:root.reduced .settings-led { transition: none; }

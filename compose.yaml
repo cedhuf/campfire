@@ -1,0 +1,49 @@
+services:
+  campfire:
+    build: .
+    image: campfire:latest
+    restart: unless-stopped
+    expose:
+      - "3000"
+    environment:
+      PORT: "3000"
+    networks:
+      - edge
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.campfire.rule=Host(`campfire.example`)
+      - traefik.http.routers.campfire.entrypoints=websecure
+      - traefik.http.routers.campfire.tls=true
+      - traefik.http.routers.campfire.tls.certresolver=le
+      - traefik.http.services.campfire.loadbalancer.server.port=3000
+      # sticky sessions for horizontal scaling (hash by IP → fixed instance)
+      - traefik.http.services.campfire.loadbalancer.sticky.cookie=true
+      - traefik.http.services.campfire.loadbalancer.sticky.cookie.name=campfire_node
+
+  traefik:
+    image: docker.io/traefik:v3.2
+    restart: unless-stopped
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --certificatesresolvers.le.acme.tlschallenge=true
+      - --certificatesresolvers.le.acme.email=you@example.com
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - letsencrypt:/letsencrypt
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - edge
+
+networks:
+  edge: {}
+
+volumes:
+  letsencrypt: {}

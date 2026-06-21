@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <title>campfire</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script>
+      // Apply reduced-motion before first paint (no flash of animation).
+      try {
+        var rm = localStorage.getItem("campfire:reduced");
+        var on = rm === null ? matchMedia("(prefers-reduced-motion: reduce)").matches : rm === "1";
+        if (on) document.documentElement.classList.add("reduced");
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <canvas id="scene" aria-hidden="true"></canvas>
+
+    <div class="daybar" id="daybar" aria-hidden="true">
+      <div class="daybar-track">
+        <div class="daybar-fill"></div>
+        <div class="daybar-marker"></div>
+      </div>
+      <div class="daybar-meta">
+        <span class="daybar-time">--:--</span>
+        <span class="daybar-sep">·</span>
+        <span class="daybar-phase">—</span>
+      </div>
+    </div>
+
+    <span class="bracket bracket-tl"></span>
+    <span class="bracket bracket-tr"></span>
+    <span class="bracket bracket-bl"></span>
+    <span class="bracket bracket-br"></span>
+
+    <div class="title-block">
+      <span class="live-dot"></span>CAMPFIRE&nbsp;/&nbsp;LIVE
+    </div>
+
+    <div class="hud" aria-live="polite">
+      <div class="hud-count" id="hud-count">01</div>
+      <div class="hud-label">PRÉSENT(E)S</div>
+    </div>
+
+    <section id="chat" class="chat" aria-label="chat éphémère" aria-live="polite">
+      <div id="chat-log" class="chat-log"></div>
+      <form id="chat-form" class="chat-form" autocomplete="off">
+        <input
+          id="chat-input"
+          class="chat-input"
+          type="text"
+          maxlength="140"
+          placeholder="murmurer…"
+          aria-label="murmurer"
+          enterkeyhint="send"
+        />
+      </form>
+    </section>
+
+    <div class="settings" id="settings">
+      <button
+        class="settings-toggle"
+        id="motion-btn"
+        type="button"
+        role="switch"
+        aria-checked="true"
+        aria-label="Animations"
+      >
+        <span class="settings-led" aria-hidden="true"></span>
+        <span class="settings-label">ANIMATIONS</span>
+      </button>
+    </div>
+
+    <script type="module" src="/main.ts"></script>
+  </body>
+</html>
