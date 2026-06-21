@@ -1,6 +1,6 @@
 export const INNER_SEATS = 6;
-const MAX_TOTAL = 500;
-const MAX_PER_IP = 10;
+const MAX_TOTAL = Number(process.env.MAX_CONNECTIONS ?? 500);
+const MAX_PER_IP = Number(process.env.MAX_CONNECTIONS_PER_IP ?? 10);
 
 export type PresenceEntry = { seatIndex: number; connectedAt: number };
 

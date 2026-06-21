@@ -1,5 +1,5 @@
-const MAX_LEN = 140;
-const RATE_LIMIT_MS = 2200;
+const MAX_LEN = Number(process.env.MSG_MAX_LENGTH ?? 140);
+const RATE_LIMIT_MS = Number(process.env.MSG_RATE_LIMIT_MS ?? 2200);
 
 export type ChatWS = { readonly readyState: number; send(data: string): void };
 

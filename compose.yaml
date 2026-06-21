@@ -1,12 +1,20 @@
 services:
   campfire:
+    # Build from source, or pull the prebuilt image instead:
+    #   image: ghcr.io/cedhuf/campfire:latest   (and remove `build:`)
     build: .
-    image: campfire:latest
+    image: ghcr.io/cedhuf/campfire:latest
     restart: unless-stopped
     expose:
       - "3000"
     environment:
       PORT: "3000"
+      # Keep true behind this Traefik proxy; false if exposed directly.
+      TRUST_PROXY: "true"
+      MAX_CONNECTIONS: "500"
+      MAX_CONNECTIONS_PER_IP: "10"
+      MSG_MAX_LENGTH: "140"
+      MSG_RATE_LIMIT_MS: "2200"
     networks:
       - edge
     labels:

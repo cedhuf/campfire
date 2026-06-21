@@ -11,13 +11,18 @@ import {
 import { register, unregister, handleSend, sanitize, broadcast } from "./chat";
 
 const PORT = Number(process.env.PORT ?? 3000);
+// Trust X-Forwarded-For for per-IP limits. Keep true behind a trusted reverse
+// proxy; set false when the server is directly exposed (XFF is then spoofable).
+const TRUST_PROXY = (process.env.TRUST_PROXY ?? "true") !== "false";
 const DIST = new URL("../dist/", import.meta.url);
 
 type ConnData = { visitorId: string; ip: string; admitted: boolean };
 
 function clientIp(req: Request, server: Bun.Server<ConnData>): string {
-  const xff = req.headers.get("x-forwarded-for");
-  if (xff) return xff.split(",")[0]!.trim();
+  if (TRUST_PROXY) {
+    const xff = req.headers.get("x-forwarded-for");
+    if (xff) return xff.split(",")[0]!.trim();
+  }
   const ip = server.requestIP(req);
   return ip?.address ?? "unknown";
 }
