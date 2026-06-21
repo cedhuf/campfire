@@ -41,6 +41,9 @@ export class Presents {
   }
 
   open(): void {
+    this.root.hidden = false;
+    // Force reflow so the transition runs from the initial state.
+    void this.root.offsetWidth;
     this.root.classList.add("open");
     this.lastSig = "";
     this.renderList();
@@ -51,6 +54,10 @@ export class Presents {
   close(): void {
     this.root.classList.remove("open");
     cancelAnimationFrame(this.raf);
+    // Hide after the transition ends to allow the fade-out.
+    setTimeout(() => {
+      if (!this.root.classList.contains("open")) this.root.hidden = true;
+    }, 220);
   }
 
   isOpen(): boolean {
