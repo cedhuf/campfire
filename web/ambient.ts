@@ -5,6 +5,7 @@
 // Per-visitor (not shared), gesture-armed for autoplay policy, on by default,
 // toggled from the settings modal and persisted locally.
 const KEY = "campfire:fire-sound";
+const VOL_KEY = "campfire:fire-volume";
 
 // Seconds trimmed off each loop to avoid the file's fade-in / fade-out.
 const LOOP_HEAD = 0.6;
@@ -13,15 +14,17 @@ const LOOP_TAIL = 0.9;
 export class FireSound {
   private audio: HTMLAudioElement;
   private enabled: boolean;
+  private volume: number;
   private armed = false;
 
   constructor(url: string) {
     this.enabled = localStorage.getItem(KEY) !== "0"; // default on
+    this.volume = Number(localStorage.getItem(VOL_KEY) ?? 40) / 100; // 0..1, default 0.4
     this.audio = new Audio();
     this.audio.src = url;
     this.audio.preload = "none"; // stream on play, don't download upfront
     this.audio.loop = false; // we loop manually to skip the baked fades
-    this.audio.volume = 0.4;
+    this.audio.volume = this.volume;
 
     // Jump back to the steady middle before the tail fade. The head region is
     // already buffered (we just played it), so the seek is instant — no rebuffer.
@@ -48,6 +51,16 @@ export class FireSound {
     this.enabled = on;
     localStorage.setItem(KEY, on ? "1" : "0");
     this.apply();
+  }
+
+  getVolume(): number {
+    return this.volume;
+  }
+
+  setVolume(v: number): void {
+    this.volume = Math.max(0, Math.min(1, v));
+    this.audio.volume = this.volume;
+    localStorage.setItem(VOL_KEY, String(Math.round(this.volume * 100)));
   }
 
   private apply(): void {

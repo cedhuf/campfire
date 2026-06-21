@@ -326,6 +326,56 @@ html, body {
   color: var(--text-dim);
 }
 
+/* Volume slider — range input restyled to match the bracketed, mono look */
+.setting-row-volume {
+  align-items: center;
+}
+.volume-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 110px;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  --vol-fill: 40%;
+}
+.volume-slider:focus-visible { outline: 1px solid var(--line-bright); outline-offset: 4px; }
+.volume-slider::-webkit-slider-runnable-track {
+  height: 1px;
+  background: linear-gradient(to right, var(--accent) 0%, var(--accent) var(--vol-fill), rgba(255,255,255,0.12) var(--vol-fill), rgba(255,255,255,0.12) 100%);
+}
+.volume-slider::-moz-range-track {
+  height: 1px;
+  background: rgba(255,255,255,0.12);
+}
+.volume-slider::-moz-range-progress {
+  height: 1px;
+  background: var(--accent);
+}
+.volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  margin-top: -4.5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent-glow);
+  border: none;
+  transition: transform 0.15s ease;
+}
+.volume-slider::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent-glow);
+  border: none;
+}
+.volume-slider:hover::-webkit-slider-thumb { transform: scale(1.15); }
+
 /* Toggle switch */
 .switch {
   position: relative;

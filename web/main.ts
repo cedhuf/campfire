@@ -31,6 +31,7 @@ const gateError = document.getElementById("gate-error") as HTMLElement;
 const toast = document.getElementById("toast") as HTMLElement;
 const daybarBtn = document.getElementById("daybar-btn") as HTMLButtonElement;
 const presentsEl = document.getElementById("presents") as HTMLElement;
+const fireVolume = document.getElementById("fire-volume") as HTMLInputElement;
 
 type PresenceItem = { visitorId: string; seatIndex: number; connectedAt: number };
 
@@ -272,6 +273,15 @@ fireBtn.addEventListener("click", () => {
   const on = !fire.isEnabled();
   fire.setEnabled(on);
   applyFire(on);
+});
+
+// Fire crackle volume
+fireVolume.value = String(Math.round(fire.getVolume() * 100));
+const syncVolFill = () => fireVolume.style.setProperty("--vol-fill", fireVolume.value + "%");
+syncVolFill();
+fireVolume.addEventListener("input", () => {
+  fire.setVolume(Number(fireVolume.value) / 100);
+  syncVolFill();
 });
 
 // Share the link
