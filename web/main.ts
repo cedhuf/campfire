@@ -311,5 +311,21 @@ applyLang(detectLang());
 tickTime();
 setInterval(tickTime, 1000);
 
+// iOS Safari: when the virtual keyboard opens, fixed-positioned elements at
+// the bottom (chat input, radio, actions) get covered. The
+// `interactive-widget=resizes-content` viewport meta handles this on iOS
+// 16.4+, but older versions need a JS fallback that tracks the visual
+// viewport and exposes the keyboard height as a CSS variable.
+if (window.visualViewport) {
+  const vv = window.visualViewport;
+  const updateKb = () => {
+    const kb = Math.max(0, window.innerHeight - vv.height);
+    document.documentElement.style.setProperty("--kb", kb + "px");
+  };
+  vv.addEventListener("resize", updateKb);
+  vv.addEventListener("scroll", updateKb);
+  updateKb();
+}
+
 connect();
 scene.start();

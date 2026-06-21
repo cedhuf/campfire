@@ -39,15 +39,15 @@ html, body {
   z-index: 5;
   pointer-events: none;
 }
-.bracket-tl { top: 18px; left: 18px; border-right: none; border-bottom: none; }
-.bracket-tr { top: 18px; right: 18px; border-left: none; border-bottom: none; }
-.bracket-bl { bottom: 18px; left: 18px; border-right: none; border-top: none; }
-.bracket-br { bottom: 18px; right: 18px; border-left: none; border-top: none; }
+.bracket-tl { top: calc(18px + env(safe-area-inset-top, 0px)); left: 18px; border-right: none; border-bottom: none; }
+.bracket-tr { top: calc(18px + env(safe-area-inset-top, 0px)); right: 18px; border-left: none; border-bottom: none; }
+.bracket-bl { bottom: calc(18px + env(safe-area-inset-bottom, 0px)); left: 18px; border-right: none; border-top: none; }
+.bracket-br { bottom: calc(18px + env(safe-area-inset-bottom, 0px)); right: 18px; border-left: none; border-top: none; }
 
 /* Title block */
 .title-block {
   position: absolute;
-  top: 36px;
+  top: calc(36px + env(safe-area-inset-top, 0px));
   left: 38px;
   font-size: 11px;
   letter-spacing: 0.16em;
@@ -74,7 +74,7 @@ html, body {
 /* HUD counter */
 .hud {
   position: absolute;
-  top: 30px;
+  top: calc(30px + env(safe-area-inset-top, 0px));
   right: 38px;
   text-align: right;
   z-index: 6;
@@ -98,7 +98,7 @@ html, body {
 /* Day progress bar (0h -> 24h), aligned with the corner-bracket frame */
 .daybar {
   position: fixed;
-  top: 18px;
+  top: calc(18px + env(safe-area-inset-top, 0px));
   left: 38px;
   right: 38px;
   z-index: 6;
@@ -192,7 +192,7 @@ html, body {
 .radio {
   position: fixed;
   left: 30px;
-  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px) + var(--kb, 0px));
   z-index: 8;
   display: flex;
   align-items: center;
@@ -238,7 +238,7 @@ html, body {
 .actions {
   position: fixed;
   right: 26px;
-  bottom: calc(13px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(13px + env(safe-area-inset-bottom, 0px) + var(--kb, 0px));
   z-index: 8;
   display: flex;
   align-items: center;
@@ -437,7 +437,7 @@ html, body {
 .toast {
   position: fixed;
   left: 50%;
-  bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(70px + env(safe-area-inset-bottom, 0px) + var(--kb, 0px));
   transform: translateX(-50%);
   z-index: 25;
   padding: 7px 14px;
@@ -465,7 +465,7 @@ html, body {
   flex-direction: column;
   align-items: center;
   padding: 0 16px;
-  padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px) + var(--kb, 0px));
   pointer-events: none;
 }
 .chat-log {
@@ -520,6 +520,15 @@ html, body {
 }
 .chat-input:focus {
   background: rgba(255, 90, 54, 0.04);
+}
+
+/* iOS Safari zooms on inputs with font-size < 16px. Bump on touch / small
+   screens to prevent the zoom-then-loss-of-focus issue. */
+@media (max-width: 768px), (pointer: coarse) {
+  .chat-input,
+  .gate-input {
+    font-size: 16px;
+  }
 }
 
 /* Chat — "in the air" mode (messages drift up around the fire) */
