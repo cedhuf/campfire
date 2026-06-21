@@ -11,6 +11,8 @@ vanishes when the process restarts: that's a feature, not a limitation.
 ## Features
 
 - **Real-time presence** over WebSocket: oscillating silhouettes around the fire + a live counter.
+  Each visitor gets a **stable, deterministic color** (derived from their `visitorId`) shared by
+  their on-canvas marker and their chat messages — so you can spot who's who at a glance.
 - **Ephemeral chat, two display modes**: messages drifting **in the air** around the fire
   (default) or a classic bottom log. Zero persistence either way.
 - **Shared lofi radio**: a single switch synced across everyone (one toggles it for all), with a

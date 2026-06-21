@@ -3,6 +3,8 @@ const MAX_AIR = 10;
 const LIFETIME_CLASSIC = 50_000;
 const LIFETIME_AIR = 26_000;
 
+import { hueForVisitor, hsla } from "./color";
+
 export type ChatMode = "air" | "classic";
 
 type MsgEl = {
@@ -69,7 +71,10 @@ export class Chat {
 
   private addClassic(visitorId: string, text: string, ts: number): void {
     const el = document.createElement("div");
-    el.className = "chat-msg" + (visitorId === this.selfId ? " is-self" : "");
+    const isSelf = visitorId === this.selfId;
+    el.className = "chat-msg" + (isSelf ? " is-self" : "");
+    const hue = hueForVisitor(visitorId);
+    el.style.color = hsla(hue, 32, isSelf ? 86 : 78, 1);
     const tsSpan = document.createElement("span");
     tsSpan.className = "ts";
     tsSpan.textContent = this.fmtTime(ts);
@@ -89,7 +94,10 @@ export class Chat {
 
   private addAir(visitorId: string, text: string): void {
     const el = document.createElement("div");
-    el.className = "air-msg" + (visitorId === this.selfId ? " is-self" : "");
+    const isSelf = visitorId === this.selfId;
+    el.className = "air-msg" + (isSelf ? " is-self" : "");
+    const hue = hueForVisitor(visitorId);
+    el.style.color = hsla(hue, 38, isSelf ? 90 : 82, 0.94);
     el.textContent = text;
     const leftPct = 50 + (Math.random() * 2 - 1) * 20; // 30%..70%
     el.style.left = leftPct + "%";

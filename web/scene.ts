@@ -1,7 +1,9 @@
 import { themeAt, rgb, type Theme } from "./theme";
+import { fnv1a, hueForVisitor, hsla } from "./color";
 
 type Oscillator = {
   visitorId: string;
+  hue: number;
   a: number;
   b: number;
   phase: number;
@@ -56,15 +58,6 @@ const SEAT_RADIUS = 17;
 const OSC_AMP_X = 4;
 const OSC_AMP_Y = 6;
 
-function fnv1a(str: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return h >>> 0;
-}
-
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
@@ -83,6 +76,7 @@ function buildOscillator(visitorId: string, seatIndex: number): Oscillator {
   const seatAngle = (seatIndex / 6) * Math.PI * 2 - Math.PI / 2;
   return {
     visitorId,
+    hue: hueForVisitor(visitorId),
     a: pair[0],
     b: pair[1],
     phase: rng() * Math.PI * 2,
@@ -416,7 +410,7 @@ export class Scene {
         const p0 = trail[i - 1]!;
         const p1 = trail[i]!;
         const segAlpha = (i / len) * headAlpha * 0.7;
-        ctx.strokeStyle = `rgba(215, 210, 195, ${segAlpha})`;
+        ctx.strokeStyle = hsla(o.hue, 30, 72, segAlpha);
         ctx.lineWidth = 1.1;
         ctx.lineCap = "round";
         ctx.beginPath();
@@ -425,11 +419,11 @@ export class Scene {
         ctx.stroke();
       }
       const head = trail[len - 1]!;
-      ctx.fillStyle = `rgba(235, 230, 215, ${headAlpha})`;
-      ctx.shadowBlur = 4;
-      ctx.shadowColor = "rgba(220, 215, 200, 0.5)";
+      ctx.fillStyle = hsla(o.hue, 40, 80, headAlpha);
+      ctx.shadowBlur = 6;
+      ctx.shadowColor = hsla(o.hue, 45, 70, 0.6);
       ctx.beginPath();
-      ctx.arc(head.x, head.y, 1.6, 0, Math.PI * 2);
+      ctx.arc(head.x, head.y, 1.8, 0, Math.PI * 2);
       ctx.fill();
       ctx.shadowBlur = 0;
     }
@@ -473,9 +467,9 @@ export class Scene {
       const sy = this.cy + o.seatY * this.vmin;
       const x = sx + Math.sin(o.t * o.a + o.phase) * ampX * o.ax;
       const y = sy + Math.sin(o.t * o.b) * ampY * o.ay;
-      ctx.fillStyle = `rgba(235, 230, 215, ${o.baseAlpha})`;
+      ctx.fillStyle = hsla(o.hue, 40, 80, o.baseAlpha);
       ctx.beginPath();
-      ctx.arc(x, y, 1.6, 0, Math.PI * 2);
+      ctx.arc(x, y, 1.8, 0, Math.PI * 2);
       ctx.fill();
     }
   }
