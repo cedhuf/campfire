@@ -10,12 +10,18 @@ type Oscillator = {
   speed: number;
   ax: number;
   ay: number;
-  seatX: number;
+  seatHomeX: number; // anchor seat (fixed)
+  seatHomeY: number;
+  seatX: number; // current drifted center (lerp toward target)
   seatY: number;
+  seatTargetX: number; // wander target, refreshed every few seconds
+  seatTargetY: number;
+  seatNextTurn: number; // when to pick a new wander target (elapsed)
   baseAlpha: number;
   driftSpeed: number;
   alpha: number;
   alphaTarget: number;
+  flash: number; // ember-collision flash (decays to 0)
   t: number;
   trail: Array<{ x: number; y: number }>;
 };
@@ -51,12 +57,15 @@ type Star = {
   phase: number;
 };
 
-const TRAIL_LEN = 24;
+const TRAIL_LEN = 28;
 const EMBER_COUNT = 30;
 const STAR_COUNT = 80;
 const SEAT_RADIUS = 17;
-const OSC_AMP_X = 4;
-const OSC_AMP_Y = 6;
+const SEAT_WANDER = 6; // max additional radius (vmin) the seat can drift to
+const SEAT_TURN_MIN = 6; // seconds before a new wander target
+const SEAT_TURN_MAX = 12;
+const OSC_AMP_X = 6;
+const OSC_AMP_Y = 10;
 
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
@@ -69,11 +78,13 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-function buildOscillator(visitorId: string, seatIndex: number): Oscillator {
+function buildOscillator(visitorId: string, seatIndex: number, elapsedNow: number): Oscillator {
   const seed = fnv1a(visitorId);
   const rng = mulberry32(seed);
   const pair = PAIRS[Math.floor(rng() * PAIRS.length) % PAIRS.length]!;
   const seatAngle = (seatIndex / 6) * Math.PI * 2 - Math.PI / 2;
+  const homeX = Math.cos(seatAngle) * SEAT_RADIUS;
+  const homeY = Math.sin(seatAngle) * SEAT_RADIUS * 0.65;
   return {
     visitorId,
     hue: hueForVisitor(visitorId),
@@ -83,12 +94,18 @@ function buildOscillator(visitorId: string, seatIndex: number): Oscillator {
     speed: 0.5 + rng() * 0.5,
     ax: 0.7 + rng() * 0.5,
     ay: 1.2 + rng() * 0.6,
-    seatX: Math.cos(seatAngle) * SEAT_RADIUS,
-    seatY: Math.sin(seatAngle) * SEAT_RADIUS * 0.65,
+    seatHomeX: homeX,
+    seatHomeY: homeY,
+    seatX: homeX,
+    seatY: homeY,
+    seatTargetX: homeX,
+    seatTargetY: homeY,
+    seatNextTurn: elapsedNow + SEAT_TURN_MIN + rng() * (SEAT_TURN_MAX - SEAT_TURN_MIN),
     baseAlpha: 0.5 + rng() * 0.35,
     driftSpeed: 0.04 + rng() * 0.06,
     alpha: 0,
     alphaTarget: 1,
+    flash: 0,
     t: 0,
     trail: [],
   };
@@ -157,7 +174,7 @@ export class Scene {
   add(visitorId: string, seatIndex: number): void {
     if (this.oscs.has(visitorId)) return;
     if (seatIndex > 5) return;
-    this.oscs.set(visitorId, buildOscillator(visitorId, seatIndex));
+    this.oscs.set(visitorId, buildOscillator(visitorId, seatIndex, this.elapsed));
     if (this.reduced) this.renderStatic();
   }
 
@@ -351,6 +368,10 @@ export class Scene {
   private updateAndDrawEmbers(): void {
     const ctx = this.ctx;
     const v = this.vmin;
+    // Distance threshold for an ember "kissing" a pastille. Tuned so it
+    // triggers a few times per minute without being constant.
+    const kissR = 2.2 * v;
+    const kissR2 = kissR * kissR;
     for (const e of this.embers) {
       e.x += e.vx;
       e.y += e.vy;
@@ -377,6 +398,21 @@ export class Scene {
       ctx.beginPath();
       ctx.arc(e.x, e.y, e.size, 0, Math.PI * 2);
       ctx.fill();
+
+      // D — ember/pastille collision: light up the oscillator it crossed.
+      for (const o of this.oscs.values()) {
+        if (o.alpha < 0.05 || o.trail.length === 0) continue;
+        const head = o.trail[o.trail.length - 1]!;
+        const dx = head.x - e.x;
+        const dy = head.y - e.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < kissR2) {
+          o.flash = Math.min(1, o.flash + 0.6);
+          // nudge the ember aside so it doesn't re-trigger every frame
+          e.vx += (dx / Math.sqrt(d2 || 1)) * 0.4 * v;
+          e.vy += (dy / Math.sqrt(d2 || 1)) * 0.4 * v;
+        }
+      }
     }
     ctx.shadowBlur = 0;
   }
@@ -385,6 +421,7 @@ export class Scene {
     const ctx = this.ctx;
     const ampX = OSC_AMP_X * this.vmin;
     const ampY = OSC_AMP_Y * this.vmin;
+    const t = this.elapsed;
 
     for (const o of this.oscs.values()) {
       o.alpha += (o.alphaTarget - o.alpha) * 0.05;
@@ -395,6 +432,22 @@ export class Scene {
       o.t += 0.016 * o.speed * globalSpeed;
       o.phase += o.driftSpeed * 0.01;
 
+      // Slow seat wander: pick a new target inside a disk around the home
+      // seat every few seconds, and ease toward it.
+      if (t >= o.seatNextTurn) {
+        const ang = Math.random() * Math.PI * 2;
+        const r = Math.random() * SEAT_WANDER;
+        o.seatTargetX = o.seatHomeX + Math.cos(ang) * r;
+        o.seatTargetY = o.seatHomeY + Math.sin(ang) * r * 0.7;
+        o.seatNextTurn =
+          t + SEAT_TURN_MIN + Math.random() * (SEAT_TURN_MAX - SEAT_TURN_MIN);
+      }
+      o.seatX += (o.seatTargetX - o.seatX) * 0.006;
+      o.seatY += (o.seatTargetY - o.seatY) * 0.006;
+
+      // Ember-collision flash decay.
+      if (o.flash > 0) o.flash *= 0.9;
+
       const sx = this.cx + o.seatX * this.vmin;
       const sy = this.cy + o.seatY * this.vmin;
       const x = sx + Math.sin(o.t * o.a + o.phase) * ampX * o.ax * globalAmp;
@@ -404,12 +457,15 @@ export class Scene {
       if (o.trail.length > TRAIL_LEN) o.trail.shift();
 
       const headAlpha = o.baseAlpha * o.alpha;
+      const flashBoost = 1 + o.flash * 1.4;
       const trail = o.trail;
       const len = trail.length;
+      // Trail flicker: modulate segment alpha with a slow wave per oscillator.
+      const flickerWave = 0.85 + 0.15 * Math.sin(t * 8 + o.phase);
       for (let i = 1; i < len; i++) {
         const p0 = trail[i - 1]!;
         const p1 = trail[i]!;
-        const segAlpha = (i / len) * headAlpha * 0.7;
+        const segAlpha = (i / len) * headAlpha * 0.7 * flickerWave;
         ctx.strokeStyle = hsla(o.hue, 30, 72, segAlpha);
         ctx.lineWidth = 1.1;
         ctx.lineCap = "round";
@@ -419,11 +475,29 @@ export class Scene {
         ctx.stroke();
       }
       const head = trail[len - 1]!;
-      ctx.fillStyle = hsla(o.hue, 40, 80, headAlpha);
+      const pulse = 1 + 0.18 * Math.sin(t * 3 + o.phase);
+      const headR = 1.8 * pulse * flashBoost;
+
+      // Soft halo (additive) — larger, low-alpha ring that gives a diffuse
+      // glow and reacts to the per-visitor hue.
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      const haloR = headR * 3.2;
+      const halo = ctx.createRadialGradient(head.x, head.y, 0, head.x, head.y, haloR);
+      halo.addColorStop(0, hsla(o.hue, 45, 70, 0.22 * headAlpha * flashBoost));
+      halo.addColorStop(1, hsla(o.hue, 45, 70, 0));
+      ctx.fillStyle = halo;
+      ctx.beginPath();
+      ctx.arc(head.x, head.y, haloR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // Solid head dot on top.
+      ctx.fillStyle = hsla(o.hue, 40, 80, headAlpha * flashBoost);
       ctx.shadowBlur = 6;
       ctx.shadowColor = hsla(o.hue, 45, 70, 0.6);
       ctx.beginPath();
-      ctx.arc(head.x, head.y, 1.8, 0, Math.PI * 2);
+      ctx.arc(head.x, head.y, headR, 0, Math.PI * 2);
       ctx.fill();
       ctx.shadowBlur = 0;
     }
@@ -463,8 +537,8 @@ export class Scene {
     const ampY = OSC_AMP_Y * this.vmin;
     for (const o of this.oscs.values()) {
       o.alpha = o.baseAlpha;
-      const sx = this.cx + o.seatX * this.vmin;
-      const sy = this.cy + o.seatY * this.vmin;
+      const sx = this.cx + o.seatHomeX * this.vmin;
+      const sy = this.cy + o.seatHomeY * this.vmin;
       const x = sx + Math.sin(o.t * o.a + o.phase) * ampX * o.ax;
       const y = sy + Math.sin(o.t * o.b) * ampY * o.ay;
       ctx.fillStyle = hsla(o.hue, 40, 80, o.baseAlpha);

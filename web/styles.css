@@ -494,9 +494,13 @@ html, body {
   margin-right: 6px;
 }
 .chat-form {
+  position: relative;
   width: min(640px, 100%);
   pointer-events: auto;
   margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .chat-input {
   width: 100%;
@@ -517,6 +521,42 @@ html, body {
 }
 .chat-input:focus {
   background: rgba(255, 90, 54, 0.04);
+}
+
+/* Send button — only visible while the input is focused or has text. */
+.chat-send {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-dim);
+  -webkit-tap-highlight-color: transparent;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, color 0.2s ease, visibility 0.2s ease;
+}
+.chat-form.has-input .chat-send {
+  opacity: 1;
+  visibility: visible;
+}
+.chat-send:hover,
+.chat-send:focus-visible {
+  color: var(--accent);
+  outline: none;
+}
+.chat-send:focus-visible {
+  outline: 1px solid var(--line-bright);
+  outline-offset: 2px;
 }
 
 /* iOS Safari zooms on inputs with font-size < 16px. Bump on touch / small

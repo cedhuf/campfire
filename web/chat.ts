@@ -43,6 +43,15 @@ export class Chat {
       e.preventDefault();
       this.submit();
     });
+    // Reveal the send button only when there's something to send or the
+    // field is focused — keeps the input visually bare at rest.
+    const sync = () => {
+      const has = this.input.value.trim().length > 0;
+      this.form.classList.toggle("has-input", has);
+    };
+    this.input.addEventListener("input", sync);
+    this.input.addEventListener("focus", () => this.form.classList.add("has-input"));
+    this.input.addEventListener("blur", sync);
   }
 
   setSelf(visitorId: string): void {
@@ -62,6 +71,7 @@ export class Chat {
     if (!text) return;
     this.onSend(text);
     this.input.value = "";
+    this.form.classList.remove("has-input");
   }
 
   add(visitorId: string, text: string, ts: number): void {
