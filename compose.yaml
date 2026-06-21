@@ -17,6 +17,9 @@ services:
       MSG_RATE_LIMIT_MS: "2200"
       # Optional gate — set a value to require a password to join.
       # ACCESS_PASSWORD: "change-me"
+      # Timezone for the day/night cycle + clock (IANA name). Defaults to the
+      # container's local tz when unset. Set explicitly for a stable wall-clock.
+      TZ: "Europe/Paris"
     networks:
       - edge
     labels:

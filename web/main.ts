@@ -4,6 +4,7 @@ import { DayBar } from "./daybar";
 import { themeAt } from "./theme";
 import { Radio, RADIO_URL } from "./radio";
 import { FireSound, FIRE_SOUND_URL } from "./ambient";
+import { Presents } from "./presents";
 import { detectLang, setLang, applyI18n, t, type Lang } from "./i18n";
 
 const canvas = document.getElementById("scene") as HTMLCanvasElement;
@@ -28,6 +29,8 @@ const gateForm = document.getElementById("gate-form") as HTMLFormElement;
 const gateInput = document.getElementById("gate-input") as HTMLInputElement;
 const gateError = document.getElementById("gate-error") as HTMLElement;
 const toast = document.getElementById("toast") as HTMLElement;
+const daybarBtn = document.getElementById("daybar-btn") as HTMLButtonElement;
+const presentsEl = document.getElementById("presents") as HTMLElement;
 
 type PresenceItem = { visitorId: string; seatIndex: number; connectedAt: number };
 
@@ -37,23 +40,34 @@ const chat = new Chat(chatLog, chatAir, chatInput, chatForm, (text) => {
 });
 
 const daybar = new DayBar(daybarEl);
-const radio = new Radio(RADIO_URL, radioPower, radioMute, (on) => {
-  safeSend({ v: 1, type: "radio:set", on });
-});
 const fire = new FireSound(FIRE_SOUND_URL);
 
 const presence = new Map<string, PresenceItem>();
+const presents = new Presents(presentsEl, presence, () => selfId, () => Date.now() + serverOffset);
+const radio = new Radio(RADIO_URL, radioPower, radioMute, (on) => {
+  safeSend({ v: 1, type: "radio:set", on });
+});
+daybarBtn.addEventListener("click", () => {
+  if (presents.isOpen()) presents.close();
+  else presents.open();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && presents.isOpen()) presents.close();
+});
 let selfId = "";
 let ws: WebSocket | null = null;
 let backoff = 500;
 // Offset between the server clock and ours, so every visitor shares the same
-// day phase regardless of local timezone (day fraction is derived in UTC).
+// day phase regardless of local timezone. `serverOffset` aligns the wall clock;
+// `tzOffset` is the server's timezone (minutes east of UTC), applied so the
+// day fraction is expressed in the server's local time (not UTC).
 let serverOffset = 0;
+let tzOffset = 0;
 
 const DAY_MS = 86_400_000;
 
 function dayFraction(ms: number): number {
-  return (((ms % DAY_MS) + DAY_MS) % DAY_MS) / DAY_MS;
+  return ((((ms + tzOffset * 60_000) % DAY_MS) + DAY_MS) % DAY_MS) / DAY_MS;
 }
 
 function tickTime() {
@@ -61,6 +75,7 @@ function tickTime() {
   const theme = themeAt(frac);
   scene.setTheme(theme);
   daybar.update(frac, theme);
+  presents.renderHeader(frac, theme);
 }
 
 function updateHud() {
@@ -94,6 +109,7 @@ function connect() {
         selfId = msg.visitorId;
         if (typeof msg.now === "number") {
           serverOffset = msg.now - Date.now();
+          if (typeof msg.tz === "number") tzOffset = msg.tz;
           tickTime();
         }
         if (typeof msg.radio === "boolean") radio.setGlobal(msg.radio);

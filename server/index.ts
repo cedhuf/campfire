@@ -20,6 +20,33 @@ const TRUST_PROXY = (process.env.TRUST_PROXY ?? "true") !== "false";
 const ACCESS_PASSWORD = process.env.ACCESS_PASSWORD ?? "";
 const DIST = new URL("../dist/", import.meta.url);
 
+// Resolve the timezone offset (minutes east of UTC) we should anchor the
+// day/night cycle on. Honors the TZ env var (e.g. TZ=Europe/Paris) via
+// Intl.DateTimeFormat so it works regardless of the process wall-clock tz.
+// Falls back to the process local offset when TZ is unset.
+function tzOffsetMinutes(): number {
+  const tz = process.env.TZ;
+  if (tz) {
+    try {
+      const fmt = new Intl.DateTimeFormat("en-US", {
+        timeZone: tz,
+        timeZoneName: "shortOffset",
+      });
+      const part = fmt.formatToParts(new Date()).find((p) => p.type === "timeZoneName")?.value;
+      const m = part?.match(/GMT([+-])(\d{1,2})(?::(\d{2}))?/);
+      if (m) {
+        const sign = m[1] === "+" ? 1 : -1;
+        const hours = parseInt(m[2]!, 10);
+        const mins = m[3] ? parseInt(m[3], 10) : 0;
+        return sign * (hours * 60 + mins);
+      }
+    } catch {
+      // invalid TZ string — fall through
+    }
+  }
+  return -new Date().getTimezoneOffset();
+}
+
 // Shared radio state: a single switch for everyone. Anyone can turn it on/off,
 // and the change is broadcast to all (one cuts -> all cut). Ephemeral, in-memory.
 let radioOn = false;
@@ -57,7 +84,7 @@ function admit(ws: ServerWebSocket<ConnData>): void {
   const seatIndex = assignSeat();
   add(visitorId, seatIndex);
   register(ws, visitorId);
-  sendJson(ws, { v: 1, type: "init", visitorId, seatIndex, now: Date.now(), radio: radioOn, presence: snapshot() });
+  sendJson(ws, { v: 1, type: "init", visitorId, seatIndex, now: Date.now(), tz: tzOffsetMinutes(), radio: radioOn, presence: snapshot() });
   publishPresence({ v: 1, type: "presence:join", visitorId, seatIndex });
   ws.subscribe("presence");
 }

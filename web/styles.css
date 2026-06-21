@@ -156,10 +156,29 @@ html, body {
   transform: translateX(-50%);
   display: flex;
   gap: 6px;
+  align-items: center;
+  padding: 2px 6px;
+  margin: -2px -6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--mono);
   font-size: 9.5px;
   letter-spacing: 0.16em;
   color: var(--text-dim);
   white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+  pointer-events: auto;
+  transition: color 0.2s ease;
+}
+.daybar-meta:hover,
+.daybar-meta:focus-visible {
+  color: var(--text);
+  outline: none;
+}
+.daybar-meta:focus-visible {
+  outline: 1px solid var(--line-bright);
+  outline-offset: 4px;
 }
 .daybar-time {
   color: var(--text);
@@ -602,3 +621,124 @@ html, body {
 :root.reduced .lang-opt,
 :root.reduced .toast,
 :root.reduced .radio-led { transition: none; }
+
+/* Presents popover — anchored under the daybar, opens on click. */
+.presents {
+  position: fixed;
+  inset: 0;
+  z-index: 22;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 88px 20px 20px;
+  background: rgba(0, 0, 0, 0);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.18s ease, visibility 0.18s ease, background 0.18s ease;
+}
+.presents.open {
+  opacity: 1;
+  visibility: visible;
+  background: rgba(0, 0, 0, 0.45);
+}
+.presents[hidden] { display: none; }
+.presents-panel {
+  position: relative;
+  width: min(300px, 100%);
+  background: rgba(10, 10, 12, 0.94);
+  border: 1px solid var(--line-bright);
+  padding: 16px 18px 14px;
+  transform: translateY(-6px);
+  opacity: 0;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+.presents.open .presents-panel { transform: none; opacity: 1; }
+.presents-panel::before,
+.presents-panel::after {
+  content: "";
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--line-bright);
+  pointer-events: none;
+}
+.presents-panel::before { top: -1px; left: -1px; border-right: none; border-bottom: none; }
+.presents-panel::after { bottom: -1px; right: -1px; border-left: none; border-top: none; }
+.presents-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+.presents-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.presents-time {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--accent);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.presents-phase {
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  color: var(--text-dim);
+}
+.presents-close { padding: 2px; margin: -2px; }
+.presents-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.presents-count {
+  font-size: 14px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.presents-meta-label {
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  color: var(--text-dim);
+}
+.presents-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 40dvh;
+  overflow: hidden;
+}
+.present-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text);
+}
+.present-row.is-self .present-tag {
+  color: var(--accent);
+  letter-spacing: 0.16em;
+}
+.present-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.present-dur {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.present-tag {
+  margin-left: auto;
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  color: var(--text-dim);
+}

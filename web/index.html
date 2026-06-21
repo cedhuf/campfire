@@ -18,16 +18,16 @@
   <body>
     <canvas id="scene" aria-hidden="true"></canvas>
 
-    <div class="daybar" id="daybar" aria-hidden="true">
-      <div class="daybar-track">
+    <div class="daybar" id="daybar">
+      <div class="daybar-track" aria-hidden="true">
         <div class="daybar-fill"></div>
         <div class="daybar-marker"></div>
       </div>
-      <div class="daybar-meta">
+      <button class="daybar-meta" id="daybar-btn" type="button" data-i18n-aria="aria_clock" aria-label="Open clock and presence">
         <span class="daybar-time">--:--</span>
         <span class="daybar-sep">·</span>
         <span class="daybar-phase">—</span>
-      </div>
+      </button>
     </div>
 
     <span class="bracket bracket-tl"></span>
@@ -191,6 +191,29 @@
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+    <div class="presents" id="presents" role="dialog" aria-modal="false" aria-labelledby="presents-title" hidden>
+      <div class="presents-panel">
+        <div class="presents-head">
+          <div class="presents-title-block">
+            <span class="presents-time" id="presents-time">--:--</span>
+            <span class="presents-phase" id="presents-phase">—</span>
+          </div>
+          <button class="icon-btn presents-close" id="presents-close" type="button" data-i18n-aria="aria_close" aria-label="Close">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+        <div class="presents-body">
+          <div class="presents-meta">
+            <span class="presents-count" id="presents-count">00</span>
+            <span class="presents-meta-label" data-i18n="present">PRESENT</span>
+          </div>
+          <div class="presents-list" id="presents-list"></div>
+        </div>
+      </div>
+    </div>
 
     <script type="module" src="/main.ts"></script>
   </body>
