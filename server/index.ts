@@ -62,6 +62,13 @@ function tzOffsetMinutes(): number {
   return -new Date().getTimezoneOffset();
 }
 
+// Latitude (degrees) used to shape the seasonal day/night cycle on the client:
+// longer days in summer, shorter in winter, for the deployment's location.
+// Defaults to a mid-northern latitude; set CAMPFIRE_LAT or LATITUDE. Clamped
+// away from the polar circles so there's always a real sunrise/sunset.
+const rawLat = Number(process.env.CAMPFIRE_LAT ?? process.env.LATITUDE ?? 46.6);
+const LATITUDE = Number.isFinite(rawLat) ? Math.max(-66, Math.min(66, rawLat)) : 46.6;
+
 // Shared radio state: a single switch for everyone. Anyone can turn it on/off,
 // and the change is broadcast to all (one cuts -> all cut). Ephemeral, in-memory.
 let radioOn = false;
@@ -99,7 +106,7 @@ function admit(ws: ServerWebSocket<ConnData>): void {
   const seatIndex = assignSeat();
   add(visitorId, seatIndex);
   register(ws, visitorId);
-  sendJson(ws, { v: 1, type: "init", visitorId, seatIndex, now: Date.now(), tz: tzOffsetMinutes(), radio: radioOn, presence: snapshot() });
+  sendJson(ws, { v: 1, type: "init", visitorId, seatIndex, now: Date.now(), tz: tzOffsetMinutes(), lat: LATITUDE, radio: radioOn, presence: snapshot() });
   publishPresence({ v: 1, type: "presence:join", visitorId, seatIndex });
   ws.subscribe("presence");
 }
@@ -129,7 +136,7 @@ const server = Bun.serve<ConnData>({
         return;
       }
       if (typeof parsed !== "object" || parsed === null) return;
-      const p = parsed as { type?: string; text?: unknown; on?: unknown; password?: unknown };
+      const p = parsed as { type?: string; text?: unknown; on?: unknown; password?: unknown; target?: unknown };
 
       if (!ws.data.admitted) {
         if (p.type === "auth" && ACCESS_PASSWORD !== "") {
@@ -149,6 +156,24 @@ const server = Bun.serve<ConnData>({
         if (on !== radioOn) {
           radioOn = on;
           publishPresence({ v: 1, type: "radio:state", on: radioOn });
+        }
+        return;
+      }
+
+      if (p.type === "typing") {
+        publishPresence({ v: 1, type: "typing", from: ws.data.visitorId, on: p.on === true });
+        return;
+      }
+
+      if (p.type === "nudge") {
+        const target = typeof p.target === "string" ? p.target : "";
+        if (target && target !== ws.data.visitorId) {
+          publishPresence({
+            v: 1,
+            type: "nudge",
+            from: ws.data.visitorId,
+            target,
+          });
         }
         return;
       }

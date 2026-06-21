@@ -9,6 +9,10 @@ import { t } from "./i18n";
 export const RADIO_URL = "https://lofi.stream.laut.fm/lofi";
 
 const MUTE_KEY = "campfire:radio-muted";
+const VOL_KEY = "campfire:radio-volume";
+const QUIET_KEY = "campfire:quiet";
+const QUIET_START = 22; // 22h
+const QUIET_END = 8; // 8h
 
 export class Radio {
   private audio: HTMLAudioElement;
@@ -17,7 +21,9 @@ export class Radio {
   private onToggle: (on: boolean) => void;
   private globalOn = false;
   private localMuted: boolean;
+  private volume: number;
   private gestureArmed = false;
+  private quietHours = false;
 
   constructor(
     streamUrl: string,
@@ -29,16 +35,17 @@ export class Radio {
     this.muteBtn = muteBtn;
     this.onToggle = onToggle;
     this.localMuted = localStorage.getItem(MUTE_KEY) === "1";
+    this.volume = Number(localStorage.getItem(VOL_KEY) ?? 55) / 100;
+    this.quietHours = localStorage.getItem(QUIET_KEY) === "1";
 
     this.audio = new Audio();
     this.audio.src = streamUrl;
     this.audio.preload = "none";
-    this.audio.volume = 0.55;
+    this.audio.volume = this.volume;
 
     this.powerBtn.addEventListener("click", () => {
       const next = !this.globalOn;
-      // Optimistically start playback inside the click (satisfies autoplay).
-      if (next && !this.localMuted) this.audio.play().catch(() => {});
+      if (next && !this.localMuted && !this.isQuietActive()) this.audio.play().catch(() => {});
       this.onToggle(next);
     });
 
@@ -50,22 +57,57 @@ export class Radio {
     });
 
     this.render();
+    this.startQuietTicker();
   }
 
-  // Authoritative shared state from the server.
   setGlobal(on: boolean): void {
     this.globalOn = on;
     this.apply();
     this.render();
   }
 
-  // Re-render labels (e.g. after a language change).
+  getVolume(): number {
+    return this.volume;
+  }
+
+  setVolume(v: number): void {
+    this.volume = Math.max(0, Math.min(1, v));
+    this.audio.volume = this.volume;
+    localStorage.setItem(VOL_KEY, String(Math.round(this.volume * 100)));
+  }
+
+  getQuietHours(): boolean {
+    return this.quietHours;
+  }
+
+  setQuietHours(on: boolean): void {
+    this.quietHours = on;
+    localStorage.setItem(QUIET_KEY, on ? "1" : "0");
+    this.apply();
+  }
+
+  // Quiet hours follow the visitor's own local clock — it's about their
+  // real-world evening, not the shared (server-anchored) day/night cycle.
+  private isQuietActive(): boolean {
+    if (!this.quietHours) return false;
+    const h = new Date().getHours();
+    return h >= QUIET_START || h < QUIET_END;
+  }
+
+  private startQuietTicker(): void {
+    const tick = () => {
+      // re-evaluate every minute (setInterval drifts but fine for this scope)
+      this.apply();
+    };
+    window.setInterval(tick, 60_000);
+  }
+
   refresh(): void {
     this.render();
   }
 
   private apply(): void {
-    if (this.globalOn && !this.localMuted) {
+    if (this.globalOn && !this.localMuted && !this.isQuietActive()) {
       const p = this.audio.play();
       if (p) p.catch(() => this.armGesture());
     } else {
@@ -73,8 +115,6 @@ export class Radio {
     }
   }
 
-  // If autoplay is blocked (we arrived while the radio was already on), retry
-  // on the next user interaction anywhere on the page.
   private armGesture(): void {
     if (this.gestureArmed) return;
     this.gestureArmed = true;

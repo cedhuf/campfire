@@ -1,7 +1,7 @@
 const MAX_CLASSIC = 10;
 const MAX_AIR = 10;
 const LIFETIME_CLASSIC = 50_000;
-const LIFETIME_AIR = 40_000;
+const LIFETIME_AIR = 60_000;
 
 import { hueForVisitor, hsla } from "./color";
 
@@ -23,9 +23,12 @@ export class Chat {
   private input: HTMLInputElement;
   private form: HTMLFormElement;
   private onSend: (text: string) => void;
+  private onTyping: (typing: boolean) => void;
   private messages: MsgEl[] = [];
   private selfId = "";
   private mode: ChatMode = "air";
+  private typingTimer = 0;
+  private typingSent = false;
 
   constructor(
     log: HTMLElement,
@@ -33,12 +36,14 @@ export class Chat {
     input: HTMLInputElement,
     form: HTMLFormElement,
     onSend: (text: string) => void,
+    onTyping: (typing: boolean) => void = () => {},
   ) {
     this.log = log;
     this.air = air;
     this.input = input;
     this.form = form;
     this.onSend = onSend;
+    this.onTyping = onTyping;
     this.form.addEventListener("submit", (e) => {
       e.preventDefault();
       this.submit();
@@ -48,10 +53,44 @@ export class Chat {
     const sync = () => {
       const has = this.input.value.trim().length > 0;
       this.form.classList.toggle("has-input", has);
+      // Character counter: only visible past 80% of maxLength.
+      const len = this.input.value.length;
+      const max = this.input.maxLength || 140;
+      const counter = this.form.querySelector<HTMLElement>(".chat-counter");
+      if (counter) {
+        if (len > max * 0.8) {
+          counter.hidden = false;
+          counter.textContent = String(max - len);
+          counter.classList.toggle("is-near", len >= max - 10);
+        } else {
+          counter.hidden = true;
+        }
+      }
     };
-    this.input.addEventListener("input", sync);
+    this.input.addEventListener("input", () => {
+      sync();
+      this.emitTyping();
+    });
     this.input.addEventListener("focus", () => this.form.classList.add("has-input"));
     this.input.addEventListener("blur", sync);
+  }
+
+  // Signal typing on the rising edge only (one message per burst), then let the
+  // idle timeout clear it — instead of emitting on every keystroke.
+  private emitTyping(): void {
+    if (!this.typingSent) {
+      this.typingSent = true;
+      this.onTyping(true);
+    }
+    clearTimeout(this.typingTimer);
+    this.typingTimer = window.setTimeout(() => this.stopTyping(), 1500);
+  }
+
+  private stopTyping(): void {
+    clearTimeout(this.typingTimer);
+    if (!this.typingSent) return;
+    this.typingSent = false;
+    this.onTyping(false);
   }
 
   setSelf(visitorId: string): void {
@@ -72,6 +111,10 @@ export class Chat {
     this.onSend(text);
     this.input.value = "";
     this.form.classList.remove("has-input");
+    const counter = this.form.querySelector<HTMLElement>(".chat-counter");
+    if (counter) counter.hidden = true;
+    // Stop the typing signal immediately — the message is on its way.
+    this.stopTyping();
   }
 
   add(visitorId: string, text: string, ts: number): void {
@@ -112,11 +155,12 @@ export class Chat {
     const leftPct = 50 + (Math.random() * 2 - 1) * 20; // 30%..70%
     el.style.left = leftPct + "%";
     this.air.appendChild(el);
-    // Rise range: full on desktop, clamped on mobile (smaller viewport, keep
-    // the message clear of the daybar/brackets at the top).
+    // Rise range: messages drift further up the screen so they live in the
+    // scene longer. Clamped on mobile (smaller viewport) so they stay clear of
+    // the daybar / top controls.
     const coarse = window.matchMedia("(pointer: coarse)").matches;
-    const riseMin = coarse ? 22 : 28;
-    const riseMax = coarse ? 28 : 38;
+    const riseMin = coarse ? 30 : 42;
+    const riseMax = coarse ? 42 : 54;
     const entry: MsgEl = {
       el,
       bornAt: performance.now(),
@@ -162,10 +206,10 @@ export class Chat {
       if (entry.dead) return;
       const age = performance.now() - entry.bornAt;
       const p = Math.min(age / LIFETIME_AIR, 1);
-      // ease in, hold, ease out
+      // ease in, long hold, ease out (held visible most of its life)
       let op: number;
-      if (p < 0.10) op = p / 0.10;
-      else if (p > 0.65) op = (1 - p) / 0.35;
+      if (p < 0.08) op = p / 0.08;
+      else if (p > 0.78) op = (1 - p) / 0.22;
       else op = 1;
       const ty = -p * entry.rise; // vh, rises upward
       const tx = entry.drift * p; // gentle horizontal sway

@@ -17,6 +17,8 @@ export class Presents {
   private presence: Map<string, PresenceItem>;
   private selfId: () => string;
   private serverNow: () => number;
+  private onNudge: (visitorId: string) => void;
+  private hintEl: HTMLElement | null;
   private raf = 0;
 
   constructor(
@@ -24,15 +26,18 @@ export class Presents {
     presence: Map<string, PresenceItem>,
     selfId: () => string,
     serverNow: () => number,
+    onNudge: (visitorId: string) => void = () => {},
   ) {
     this.root = root;
     this.presence = presence;
     this.selfId = selfId;
     this.serverNow = serverNow;
+    this.onNudge = onNudge;
     this.timeEl = root.querySelector(".presents-time") as HTMLElement;
     this.phaseEl = root.querySelector(".presents-phase") as HTMLElement;
     this.listEl = root.querySelector(".presents-list") as HTMLElement;
     this.countEl = root.querySelector(".presents-count") as HTMLElement;
+    this.hintEl = root.querySelector(".presents-hint");
     this.closeBtn = root.querySelector(".presents-close") as HTMLButtonElement;
     this.closeBtn.addEventListener("click", () => this.close());
     this.root.addEventListener("click", (e) => {
@@ -86,6 +91,8 @@ export class Presents {
     const now = this.serverNow();
     const self = this.selfId();
     const items = Array.from(this.presence.values()).sort((a, b) => a.connectedAt - b.connectedAt);
+    // The "tap to wave" hint only makes sense when there's someone else here.
+    if (this.hintEl) this.hintEl.hidden = items.length <= 1;
     // Rebuild only if the set or order changed since last render.
     const sig = items.map((p) => p.visitorId).join(",");
     if (sig === this.lastSig) {
@@ -100,8 +107,10 @@ export class Presents {
     this.lastSig = sig;
     this.listEl.innerHTML = "";
     for (const p of items) {
-      const row = document.createElement("div");
-      row.className = "present-row" + (p.visitorId === self ? " is-self" : "");
+      const isSelf = p.visitorId === self;
+      // Others are buttons: tap to wave. Self is a plain, non-interactive row.
+      const row = document.createElement(isSelf ? "div" : "button");
+      row.className = "present-row" + (isSelf ? " is-self" : "");
       const dot = document.createElement("span");
       dot.className = "present-dot";
       const hue = hueForVisitor(p.visitorId);
@@ -110,12 +119,17 @@ export class Presents {
       const dur = document.createElement("span");
       dur.className = "present-dur";
       dur.textContent = this.duration(now - p.connectedAt);
-      const you = document.createElement("span");
-      you.className = "present-tag";
-      you.textContent = p.visitorId === self ? t("you") : "";
+      const tag = document.createElement("span");
+      tag.className = "present-tag";
+      tag.textContent = isSelf ? t("you") : t("wave");
       row.appendChild(dot);
       row.appendChild(dur);
-      row.appendChild(you);
+      row.appendChild(tag);
+      if (!isSelf) {
+        (row as HTMLButtonElement).type = "button";
+        row.setAttribute("aria-label", `${t("wave")} — ${p.visitorId.slice(0, 6)}`);
+        row.addEventListener("click", () => this.onNudge(p.visitorId));
+      }
       this.listEl.appendChild(row);
     }
   }

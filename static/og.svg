@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="58%" r="46%">
+      <stop offset="0%" stop-color="#ff5a36" stop-opacity="0.42"/>
+      <stop offset="38%" stop-color="#ff5a36" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#ff5a36" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="core" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffe9d6"/>
+      <stop offset="60%" stop-color="#ff7a45"/>
+      <stop offset="100%" stop-color="#ff5a36" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="#060606"/>
+
+  <!-- faint stars -->
+  <g fill="#dee2ee">
+    <circle cx="150" cy="90" r="1.6" opacity="0.7"/>
+    <circle cx="320" cy="150" r="1.1" opacity="0.5"/>
+    <circle cx="980" cy="110" r="1.7" opacity="0.65"/>
+    <circle cx="1080" cy="200" r="1.1" opacity="0.45"/>
+    <circle cx="250" cy="60" r="1.0" opacity="0.5"/>
+    <circle cx="860" cy="70" r="1.3" opacity="0.55"/>
+  </g>
+
+  <!-- waxing crescent moon -->
+  <g transform="translate(1010,130)">
+    <circle r="60" fill="#e8e6dc" opacity="0.08"/>
+    <path d="M0,-26 A26,26 0 1 1 0,26 A18,26 0 1 0 0,-26 Z" fill="#e8e6dc" opacity="0.85"/>
+  </g>
+
+  <!-- campfire glow + core -->
+  <rect width="1200" height="630" fill="url(#glow)"/>
+  <circle cx="600" cy="366" r="74" fill="url(#core)"/>
+
+  <!-- embers -->
+  <g fill="#ffb070">
+    <circle cx="566" cy="300" r="2.4" opacity="0.8"/>
+    <circle cx="628" cy="276" r="1.8" opacity="0.7"/>
+    <circle cx="600" cy="250" r="2.0" opacity="0.6"/>
+    <circle cx="582" cy="230" r="1.4" opacity="0.5"/>
+    <circle cx="640" cy="312" r="1.6" opacity="0.7"/>
+  </g>
+
+  <!-- wordmark -->
+  <text x="600" y="470" text-anchor="middle"
+        font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace"
+        font-size="76" letter-spacing="14" fill="#f4f1ea">campfire</text>
+  <text x="600" y="520" text-anchor="middle"
+        font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace"
+        font-size="22" letter-spacing="6" fill="#9a948a">an ephemeral chat around a fire</text>
+</svg>

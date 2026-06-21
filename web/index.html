@@ -8,6 +8,22 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="mobile-web-app-capable" content="yes" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <meta property="og:title" content="campfire" />
+    <meta property="og:description" content="An ephemeral, ambient chat around a campfire. No accounts, no history." />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/og.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="campfire" />
+    <meta name="twitter:description" content="An ephemeral, ambient chat around a campfire." />
+    <meta name="twitter:image" content="/og.png" />
+
     <title>campfire</title>
     <link rel="stylesheet" href="/styles.css" />
     <script>
@@ -40,7 +56,7 @@
     <span class="bracket bracket-br"></span>
 
     <div class="title-block">
-      <span class="live-dot"></span>CAMPFIRE&nbsp;/&nbsp;LIVE
+      <span class="live-dot" id="conn-dot"></span><span id="conn-label">CAMPFIRE&nbsp;/&nbsp;LIVE</span>
     </div>
 
     <div class="hud" aria-live="polite">
@@ -68,12 +84,13 @@
           class="chat-send"
           type="submit"
           aria-label="send"
-          data-i18n-aria="send"
+          data-i18n-aria="aria_send"
         >
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M5 12h14M13 6l6 6-6 6" />
           </svg>
         </button>
+        <span class="chat-counter" id="chat-counter" aria-live="off" hidden></span>
       </form>
     </section>
 
@@ -180,6 +197,44 @@
               data-i18n-aria="s_volume"
             />
           </div>
+          <div class="setting-row setting-row-volume">
+            <span class="setting-name" data-i18n="s_radio_vol">RADIO VOLUME</span>
+            <input
+              class="volume-slider"
+              id="radio-volume"
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value="55"
+              aria-label="Radio volume"
+              data-i18n-aria="s_radio_vol"
+            />
+          </div>
+          <div class="setting-row">
+            <span class="setting-name">
+              <span data-i18n="s_quiet">QUIET HOURS</span>
+              <span class="setting-hint" data-i18n="s_quiet_hint">Auto-pause radio 22h–8h</span>
+            </span>
+            <button class="switch" id="quiet-btn" type="button" role="switch" aria-checked="false" data-i18n-aria="s_quiet" aria-label="Quiet hours">
+              <span class="switch-knob" aria-hidden="true"></span>
+            </button>
+          </div>
+          <div class="setting-row">
+            <span class="setting-name">
+              <span data-i18n="s_nudge">NUDGES</span>
+              <span class="setting-hint" data-i18n="s_nudge_hint">Allow others to wave at you</span>
+            </span>
+            <button class="switch" id="nudge-btn" type="button" role="switch" aria-checked="true" data-i18n-aria="s_nudge" aria-label="Nudges">
+              <span class="switch-knob" aria-hidden="true"></span>
+            </button>
+          </div>
+          <div class="setting-row">
+            <span class="setting-name">
+              <span data-i18n="s_shortcut">KEYBOARD</span>
+              <span class="setting-hint" data-i18n="s_shortcut_hint">Press / or Space to whisper</span>
+            </span>
+          </div>
           <div class="setting-row">
             <span class="setting-name" data-i18n="s_language">LANGUAGE</span>
             <div class="lang-seg" id="lang-seg" role="group" aria-label="Language">
@@ -210,6 +265,21 @@
 
     <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
+    <div class="share-popover" id="share-popover" role="dialog" aria-modal="false" aria-labelledby="share-title" hidden>
+      <div class="share-panel">
+        <div class="share-head">
+          <span class="share-title" id="share-title" data-i18n="share_text">Join me at the campfire</span>
+          <button class="icon-btn share-close" id="share-close" type="button" data-i18n-aria="aria_close" aria-label="Close">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+        <div class="share-qr" id="share-qr"></div>
+        <button class="share-copy" id="share-copy" type="button" data-i18n="copy_link">Copy link</button>
+      </div>
+    </div>
+
     <div class="presents" id="presents" role="dialog" aria-modal="false" aria-labelledby="presents-title" hidden>
       <div class="presents-panel">
         <div class="presents-head">
@@ -229,6 +299,7 @@
             <span class="presents-meta-label" data-i18n="present">PRESENT</span>
           </div>
           <div class="presents-list" id="presents-list"></div>
+          <div class="presents-hint" id="presents-hint" data-i18n="wave_hint" hidden>Tap someone to wave</div>
         </div>
       </div>
     </div>

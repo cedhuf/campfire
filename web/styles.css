@@ -69,9 +69,24 @@ html { background: var(--bg); }
   width: 6px;
   height: 6px;
   border-radius: 50%;
+  background: var(--text-dim);
+  box-shadow: 0 0 6px transparent;
+  transition: background 0.3s ease, box-shadow 0.3s ease;
+}
+.live-dot.is-live {
   background: var(--accent);
   box-shadow: 0 0 6px var(--accent-glow);
   animation: pulse 1.8s ease-in-out infinite;
+}
+.live-dot.is-connecting {
+  background: rgba(255, 200, 90, 0.85);
+  box-shadow: 0 0 6px rgba(255, 200, 90, 0.45);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.live-dot.is-reconnecting {
+  background: rgba(255, 90, 90, 0.85);
+  box-shadow: 0 0 6px rgba(255, 90, 90, 0.45);
+  animation: pulse 0.8s ease-in-out infinite;
 }
 @keyframes pulse {
   0%, 100% { opacity: 0.45; }
@@ -331,6 +346,16 @@ html { background: var(--bg); }
   font-size: 10.5px;
   letter-spacing: 0.13em;
   color: var(--text-dim);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.setting-hint {
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  opacity: 0.65;
+  text-transform: none;
 }
 
 /* Volume slider — range input restyled to match the bracketed, mono look */
@@ -509,6 +534,89 @@ html { background: var(--bg); }
 }
 .gate-error[hidden] { display: none; }
 
+/* Share popover with QR code */
+.share-popover {
+  position: fixed;
+  inset: 0;
+  z-index: 23;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.18s ease, visibility 0.18s ease, background 0.18s ease;
+}
+.share-popover.open {
+  opacity: 1;
+  visibility: visible;
+  background: rgba(0, 0, 0, 0.5);
+}
+.share-popover[hidden] { display: none; }
+.share-panel {
+  position: relative;
+  width: min(280px, 100%);
+  background: rgba(10, 10, 12, 0.94);
+  border: 1px solid var(--line-bright);
+  padding: 18px;
+  transform: translateY(6px);
+  opacity: 0;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+.share-popover.open .share-panel { transform: none; opacity: 1; }
+.share-panel::before,
+.share-panel::after {
+  content: "";
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--line-bright);
+  pointer-events: none;
+}
+.share-panel::before { top: -1px; left: -1px; border-right: none; border-bottom: none; }
+.share-panel::after { bottom: -1px; right: -1px; border-left: none; border-top: none; }
+.share-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.share-title {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--text-dim);
+}
+.share-close { padding: 2px; margin: -2px; }
+.share-qr {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+.share-qr svg {
+  width: 208px;
+  height: 208px;
+  display: block;
+  border-radius: 12px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+.share-copy {
+  width: 100%;
+  padding: 8px;
+  background: none;
+  border: 1px solid var(--line-bright);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.2s ease;
+}
+.share-copy:hover { background: rgba(255, 90, 54, 0.12); }
+
 /* Toast */
 .toast {
   position: fixed;
@@ -635,6 +743,21 @@ html { background: var(--bg); }
   outline-offset: 2px;
 }
 
+/* Character counter — discreet, only visible past 80% of maxLength. */
+.chat-counter {
+  position: absolute;
+  right: 36px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  user-select: none;
+}
+.chat-counter.is-near { color: var(--accent); }
+
 /* iOS Safari zooms on inputs with font-size < 16px. Bump on touch / small
    screens to prevent the zoom-then-loss-of-focus issue. */
 @media (max-width: 768px), (pointer: coarse) {
@@ -642,6 +765,15 @@ html { background: var(--bg); }
   .gate-input {
     font-size: 16px;
   }
+}
+
+/* Narrow screens: the centered daybar clock·phase readout collides with the
+   brand (left) and count (right). Drop the brand and count onto their own line
+   below it so nothing overlaps. */
+@media (max-width: 600px) {
+  .title-block { top: calc(50px + env(safe-area-inset-top, 0px)); }
+  .hud { top: calc(46px + env(safe-area-inset-top, 0px)); }
+  .hud-count { font-size: 23px; }
 }
 
 /* Chat — "in the air" mode (messages drift up around the fire) */
@@ -775,13 +907,54 @@ html { background: var(--bg); }
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
+  font-family: var(--mono);
   font-size: 11px;
   color: var(--text);
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 6px;
+  margin: 0;
+}
+/* Others are tappable buttons (tap to wave). */
+button.present-row {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s ease;
+}
+button.present-row:hover,
+button.present-row:focus-visible {
+  background: rgba(255, 90, 54, 0.1);
+  outline: none;
+}
+button.present-row .present-tag {
+  color: var(--text-dim);
+  opacity: 0.4;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+button.present-row:hover .present-tag,
+button.present-row:focus-visible .present-tag {
+  opacity: 1;
+  color: var(--accent);
 }
 .present-row.is-self .present-tag {
   color: var(--accent);
   letter-spacing: 0.16em;
 }
+.presents-hint {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  opacity: 0.6;
+  text-align: center;
+}
+.presents-hint[hidden] { display: none; }
 .present-dot {
   flex: none;
   width: 7px;

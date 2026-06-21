@@ -21,9 +21,20 @@ type Oscillator = {
   driftSpeed: number;
   alpha: number;
   alphaTarget: number;
-  flash: number; // ember-collision flash (decays to 0)
+  flash: number; // gentle ember-kiss twinkle (decays to 0)
+  bloom: number; // message/nudge brightness bloom (decays to 0)
+  rippleT?: number; // nudge ripple progress (0..1, undefined when idle)
   t: number;
   trail: Array<{ x: number; y: number }>;
+};
+
+type ShootingStar = {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  maxLife: number;
 };
 
 type Ember = {
@@ -59,7 +70,6 @@ type Star = {
 
 const TRAIL_LEN = 28;
 const EMBER_COUNT = 30;
-const STAR_COUNT = 80;
 const SEAT_RADIUS = 17;
 const SEAT_WANDER = 6; // max additional radius (vmin) the seat can drift to
 const SEAT_TURN_MIN = 6; // seconds before a new wander target
@@ -106,6 +116,7 @@ function buildOscillator(visitorId: string, seatIndex: number, elapsedNow: numbe
     alpha: 0,
     alphaTarget: 1,
     flash: 0,
+    bloom: 0,
     t: 0,
     trail: [],
   };
@@ -134,7 +145,20 @@ export class Scene {
   private oscs = new Map<string, Oscillator>();
   private embers: Ember[] = [];
   private stars: Star[] = [];
+  private shootingStars: ShootingStar[] = [];
   private waves: WaveLayer[] = WAVES.map((w) => ({ ...w }));
+  private wind = 0;
+  private typing = new Set<string>();
+  private selfId = "";
+  private moonImg = new Image();
+  private moonReady = false;
+  private starTarget = 80;
+  // Faint, slow-drifting gas clouds that keep the night sky from feeling flat.
+  private nebula = [
+    { fx: 0.22, fy: 0.20, r: 0.46, col: "78, 96, 150", alpha: 0.06, drift: 0.0006, tw: 0.05, phase: 0 },
+    { fx: 0.64, fy: 0.13, r: 0.52, col: "96, 76, 140", alpha: 0.05, drift: 0.0004, tw: 0.04, phase: 2.1 },
+    { fx: 0.86, fy: 0.30, r: 0.40, col: "120, 84, 96", alpha: 0.045, drift: 0.0008, tw: 0.06, phase: 4.3 },
+  ];
   private raf = 0;
   private dpr = 1;
   private w = 0;
@@ -152,6 +176,11 @@ export class Scene {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d", { alpha: false })!;
     this.reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    this.moonImg.src = "/moon.png";
+    this.moonImg.onload = () => {
+      this.moonReady = true;
+      if (this.reduced) this.renderStatic();
+    };
     this.resize();
     window.addEventListener("resize", this.resize, { passive: true });
   }
@@ -169,6 +198,14 @@ export class Scene {
     this.cx = this.w * 0.5;
     this.cy = this.h * 0.58;
     for (const o of this.oscs.values()) o.trail = [];
+    // Keep star density roughly constant across screen sizes (a fixed count
+    // looks cramped on phones). Only rebuild when the target actually changes,
+    // so the mobile keyboard's viewport resize doesn't reshuffle the sky.
+    const target = Math.max(26, Math.min(110, Math.round((this.w * this.h) / 11000)));
+    if (target !== this.starTarget) {
+      this.starTarget = target;
+      this.stars = [];
+    }
   };
 
   add(visitorId: string, seatIndex: number): void {
@@ -181,6 +218,7 @@ export class Scene {
   remove(visitorId: string): void {
     const o = this.oscs.get(visitorId);
     if (o) o.alphaTarget = 0;
+    this.typing.delete(visitorId);
   }
 
   setCount(n: number): void {
@@ -190,6 +228,48 @@ export class Scene {
   setTheme(t: Theme): void {
     this.theme = t;
     // Under reduced motion the loop is idle, so repaint the static frame.
+    if (this.reduced) this.renderStatic();
+  }
+
+  setTyping(visitorId: string, typing: boolean): void {
+    if (typing) this.typing.add(visitorId);
+    else this.typing.delete(visitorId);
+    if (this.reduced) this.renderStatic();
+  }
+
+  // The viewer's own visitor id — its pastille gets a subtle marker ring.
+  setSelf(visitorId: string): void {
+    this.selfId = visitorId;
+    if (this.reduced) this.renderStatic();
+  }
+
+  // Brief brightness bloom on a pastille when its visitor sends a message, so
+  // you can see who just spoke. Its own channel (bloom), separate from the
+  // ember-kiss twinkle, so the two never fight.
+  speak(visitorId: string): void {
+    const o = this.oscs.get(visitorId);
+    if (!o) return;
+    o.bloom = Math.min(1.8, o.bloom + 1.0);
+    if (this.reduced) this.renderStatic();
+  }
+
+  // Drop any oscillators not present in the given id set. Called on (re)init so
+  // a reconnect can't leave orphaned pastilles behind (the count stays right
+  // but stale dots would otherwise pile up, especially on mobile).
+  retain(ids: Set<string>): void {
+    for (const id of [...this.oscs.keys()]) {
+      if (!ids.has(id)) {
+        this.oscs.delete(id);
+        this.typing.delete(id);
+      }
+    }
+  }
+
+  ripple(visitorId: string): void {
+    const o = this.oscs.get(visitorId);
+    if (!o) return;
+    o.bloom = Math.max(o.bloom, 1.2);
+    o.rippleT = 0;
     if (this.reduced) this.renderStatic();
   }
 
@@ -205,7 +285,7 @@ export class Scene {
 
   private ensureStars(): void {
     if (this.stars.length > 0) return;
-    for (let i = 0; i < STAR_COUNT; i++) {
+    for (let i = 0; i < this.starTarget; i++) {
       this.stars.push({
         fx: Math.random(),
         fy: 0.03 + Math.random() * Math.random() * 0.58, // biased toward the top
@@ -217,6 +297,32 @@ export class Scene {
     }
   }
 
+  // Very faint colored haze drifting slowly across the upper sky. Additive and
+  // low-alpha so it only registers as a subtle depth cue, strongest at night.
+  private drawNebula(): void {
+    const intensity = this.theme.star;
+    if (intensity <= 0.04) return;
+    const ctx = this.ctx;
+    const t = this.elapsed;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (const c of this.nebula) {
+      const breathe = 0.55 + 0.45 * Math.sin(t * c.tw + c.phase);
+      const x = (((c.fx + t * c.drift) % 1.25) - 0.12) * this.w;
+      const y = c.fy * this.h;
+      const r = c.r * this.w;
+      const a = c.alpha * intensity * breathe;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, `rgba(${c.col}, ${a})`);
+      g.addColorStop(1, `rgba(${c.col}, 0)`);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   private drawStars(): void {
     const alpha = this.theme.star;
     if (alpha <= 0.01) return;
@@ -226,8 +332,147 @@ export class Scene {
       const tw = this.reduced ? 1 : 0.7 + 0.3 * Math.sin(this.elapsed * s.tw + s.phase);
       ctx.fillStyle = `rgba(222, 226, 238, ${s.a * alpha * tw})`;
       ctx.beginPath();
-      ctx.arc(s.fx * this.w, s.fy * this.h, s.r, 0, Math.PI * 2);
+      ctx.arc(s.fx * this.w + this.wind * 0.2 * this.vmin, s.fy * this.h, s.r, 0, Math.PI * 2);
       ctx.fill();
+    }
+  }
+
+  // Rare bright streak across the upper sky. Spawned only at night, ~1 per 60s.
+  private drawShootingStars(): void {
+    const ctx = this.ctx;
+    if (this.theme.star > 0.5 && Math.random() < 1 / 3600) {
+      const startX = Math.random() * this.w * 0.6;
+      const startY = Math.random() * this.h * 0.5;
+      const angle = Math.PI * 0.18 + Math.random() * 0.12; // shallow diagonal
+      const speed = (this.w * 0.9) / 0.8; // cross ~90% of width in 0.8s (per second)
+      const maxLife = 48; // ~0.8s at 60fps
+      this.shootingStars.push({
+        x: startX,
+        y: startY,
+        vx: Math.cos(angle) * speed / 60,
+        vy: Math.sin(angle) * speed / 60,
+        life: maxLife,
+        maxLife,
+      });
+    }
+    for (let i = this.shootingStars.length - 1; i >= 0; i--) {
+      const s = this.shootingStars[i]!;
+      s.x += s.vx;
+      s.y += s.vy;
+      s.life -= 1;
+      if (s.life <= 0) {
+        this.shootingStars.splice(i, 1);
+        continue;
+      }
+      const p = s.life / s.maxLife;
+      const tailLen = 9 * this.vmin;
+      const mag = Math.hypot(s.vx, s.vy) || 1;
+      const tx = s.x - (s.vx / mag) * tailLen;
+      const ty = s.y - (s.vy / mag) * tailLen;
+      const grad = ctx.createLinearGradient(s.x, s.y, tx, ty);
+      grad.addColorStop(0, `rgba(255, 255, 255, ${0.9 * p})`);
+      grad.addColorStop(1, "rgba(255, 255, 255, 0)");
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = 1.6;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(s.x, s.y);
+      ctx.lineTo(tx, ty);
+      ctx.stroke();
+      // Bright head dot.
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.9 * p})`;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Trace the lit (or unlit) region of the moon as a closed path: down one limb
+  // and back up the terminator. The terminator is a half-ellipse with
+  // horizontal radius R·cos(phase), signed so it bulges the right way for
+  // crescent vs gibbous. Lit limb is on the right when waxing, left when waning.
+  private tracePhase(mx: number, my: number, R: number, phase: number, lit: boolean): void {
+    const ctx = this.ctx;
+    const waxing = phase < 0.5;
+    const k = Math.cos(phase * Math.PI * 2); // +1 new … -1 full
+    const litSign = waxing ? 1 : -1;
+    const sign = lit ? litSign : -litSign;
+    const STEPS = 36;
+    ctx.beginPath();
+    for (let i = 0; i <= STEPS; i++) {
+      const yy = -R + (2 * R * i) / STEPS;
+      const half = Math.sqrt(Math.max(0, R * R - yy * yy));
+      if (i === 0) ctx.moveTo(mx + sign * half, my + yy);
+      else ctx.lineTo(mx + sign * half, my + yy);
+    }
+    for (let i = STEPS; i >= 0; i--) {
+      const yy = -R + (2 * R * i) / STEPS;
+      const half = Math.sqrt(Math.max(0, R * R - yy * yy));
+      ctx.lineTo(mx + (waxing ? k : -k) * half, my + yy);
+    }
+    ctx.closePath();
+  }
+
+  // The moon: a textured disc (static/moon.png) clipped to a circle, with the
+  // unlit side dimmed to a faint earthshine along the real terminator. A soft
+  // breathing halo and a very slow drift/bob keep it from feeling pasted-on.
+  // Falls back to a flat vector disc until the texture loads. Fades with night.
+  private drawMoon(): void {
+    const vis = this.theme.star;
+    if (vis <= 0.12) return;
+    const ctx = this.ctx;
+    const t = this.elapsed;
+    const R = 4.4 * this.vmin;
+    const mx = this.w * 0.7 + Math.sin(t * 0.018) * 1.6 * this.vmin;
+    const my = this.h * 0.15 + Math.sin(t * 0.05 + 1) * 0.7 * this.vmin;
+
+    // Synodic month phase in [0,1): 0 = new, 0.5 = full. Anchored on a known
+    // new moon (2000-01-06 18:14 UTC). Date-level precision is plenty here.
+    const SYNODIC = 29.530588853 * 86_400_000;
+    const NEW_MOON_REF = Date.UTC(2000, 0, 6, 18, 14);
+    const phase = ((((Date.now() - NEW_MOON_REF) % SYNODIC) + SYNODIC) % SYNODIC) / SYNODIC;
+    const illum = (1 - Math.cos(phase * Math.PI * 2)) / 2; // lit fraction 0..1
+    if (illum < 0.04) return; // nothing to draw around the new moon
+
+    // Soft halo, breathing slightly and dimmed by how little of the disc is lit.
+    const breathe = 0.85 + 0.15 * Math.sin(t * 0.6);
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    const halo = ctx.createRadialGradient(mx, my, R * 0.5, mx, my, R * 2.9);
+    halo.addColorStop(0, `rgba(226, 228, 236, ${0.12 * vis * illum * breathe})`);
+    halo.addColorStop(1, "rgba(226, 228, 236, 0)");
+    ctx.fillStyle = halo;
+    ctx.beginPath();
+    ctx.arc(mx, my, R * 2.9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    if (this.moonReady) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(mx, my, R, 0, Math.PI * 2);
+      ctx.clip();
+      const draw = R * 2 * 1.08; // slight overscan so the disc fills the clip
+      ctx.globalAlpha = Math.min(1, vis * 1.15);
+      ctx.drawImage(this.moonImg, mx - draw / 2, my - draw / 2, draw, draw);
+      ctx.globalAlpha = 1;
+      // Earthshine: dim (not erase) the unlit region along the terminator.
+      this.tracePhase(mx, my, R, phase, false);
+      ctx.fillStyle = "rgba(3, 4, 9, 0.84)";
+      ctx.fill();
+      ctx.restore();
+    } else {
+      // Flat vector disc until the texture loads.
+      this.tracePhase(mx, my, R, phase, true);
+      ctx.save();
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = `rgba(232, 230, 220, ${0.4 * vis})`;
+      const g = ctx.createLinearGradient(mx, my - R, mx, my + R);
+      g.addColorStop(0, `rgba(232, 230, 220, ${0.85 * vis})`);
+      g.addColorStop(1, `rgba(232, 230, 220, ${0.6 * vis})`);
+      ctx.fillStyle = g;
+      ctx.fill();
+      ctx.restore();
     }
   }
 
@@ -289,8 +534,9 @@ export class Scene {
     const w = this.w;
     const wc = this.theme.wave;
     const step = Math.max(4, Math.floor(w / 240));
+    const tideOffset = Math.sin(this.elapsed * 0.008) * 0.012;
     for (const layer of this.waves) {
-      const baseY = this.h * layer.baseY;
+      const baseY = this.h * (layer.baseY + tideOffset);
       const amp = layer.amp * this.vmin;
       const k = (layer.freq * Math.PI * 2) / w;
       ctx.beginPath();
@@ -376,6 +622,7 @@ export class Scene {
       e.x += e.vx;
       e.y += e.vy;
       e.vy -= 0.004 * v;
+      e.vx += this.wind * 0.05 * v;
       e.vx *= 0.99;
       e.life -= 1;
       if (e.life <= 0) {
@@ -407,7 +654,9 @@ export class Scene {
         const dy = head.y - e.y;
         const d2 = dx * dx + dy * dy;
         if (d2 < kissR2) {
-          o.flash = Math.min(1, o.flash + 0.6);
+          // A very delicate twinkle — small and on its own channel so it never
+          // overwhelms the pastille or clashes with the "spoke" bloom.
+          o.flash = Math.min(0.35, o.flash + 0.12);
           // nudge the ember aside so it doesn't re-trigger every frame
           e.vx += (dx / Math.sqrt(d2 || 1)) * 0.4 * v;
           e.vy += (dy / Math.sqrt(d2 || 1)) * 0.4 * v;
@@ -445,8 +694,10 @@ export class Scene {
       o.seatX += (o.seatTargetX - o.seatX) * 0.006;
       o.seatY += (o.seatTargetY - o.seatY) * 0.006;
 
-      // Ember-collision flash decay.
+      // Effect decay: the ember twinkle fades fast, the speak/nudge bloom
+      // fades a touch slower for a softer glow.
       if (o.flash > 0) o.flash *= 0.9;
+      if (o.bloom > 0) o.bloom *= 0.92;
 
       const sx = this.cx + o.seatX * this.vmin;
       const sy = this.cy + o.seatY * this.vmin;
@@ -457,7 +708,7 @@ export class Scene {
       if (o.trail.length > TRAIL_LEN) o.trail.shift();
 
       const headAlpha = o.baseAlpha * o.alpha;
-      const flashBoost = 1 + o.flash * 1.4;
+      const lift = 1 + o.bloom * 1.3 + o.flash * 0.5;
       const trail = o.trail;
       const len = trail.length;
       // Trail flicker: modulate segment alpha with a slow wave per oscillator.
@@ -476,7 +727,8 @@ export class Scene {
       }
       const head = trail[len - 1]!;
       const pulse = 1 + 0.18 * Math.sin(t * 3 + o.phase);
-      const headR = 1.8 * pulse * flashBoost;
+      const typingBoost = this.typing.has(o.visitorId) ? 1.4 : 1;
+      const headR = 1.8 * pulse * lift * typingBoost;
 
       // Soft halo (additive) — larger, low-alpha ring that gives a diffuse
       // glow and reacts to the per-visitor hue.
@@ -484,7 +736,7 @@ export class Scene {
       ctx.globalCompositeOperation = "lighter";
       const haloR = headR * 3.2;
       const halo = ctx.createRadialGradient(head.x, head.y, 0, head.x, head.y, haloR);
-      halo.addColorStop(0, hsla(o.hue, 45, 70, 0.22 * headAlpha * flashBoost));
+      halo.addColorStop(0, hsla(o.hue, 45, 70, 0.22 * headAlpha * lift));
       halo.addColorStop(1, hsla(o.hue, 45, 70, 0));
       ctx.fillStyle = halo;
       ctx.beginPath();
@@ -493,13 +745,36 @@ export class Scene {
       ctx.restore();
 
       // Solid head dot on top.
-      ctx.fillStyle = hsla(o.hue, 40, 80, headAlpha * flashBoost);
+      ctx.fillStyle = hsla(o.hue, 40, 80, headAlpha * lift);
       ctx.shadowBlur = 6;
       ctx.shadowColor = hsla(o.hue, 45, 70, 0.6);
       ctx.beginPath();
       ctx.arc(head.x, head.y, headR, 0, Math.PI * 2);
       ctx.fill();
       ctx.shadowBlur = 0;
+
+      // Your own pastille: a thin, gently breathing marker ring.
+      if (o.visitorId === this.selfId) {
+        const ringR = headR * 2.6 + 1.2 * Math.sin(t * 1.6 + o.phase);
+        ctx.strokeStyle = hsla(o.hue, 48, 80, 0.4 * o.alpha);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(head.x, head.y, ringR, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // Nudge ripple: expanding ring that fades out over ~1s.
+      if (o.rippleT !== undefined && o.rippleT < 1) {
+        const rr = headR + (headR * 8 - headR) * o.rippleT;
+        const ra = (1 - o.rippleT) * 0.6;
+        ctx.strokeStyle = hsla(o.hue, 50, 75, ra);
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(head.x, head.y, rr, 0, Math.PI * 2);
+        ctx.stroke();
+        o.rippleT += 0.04;
+        if (o.rippleT >= 1) o.rippleT = undefined;
+      }
     }
   }
 
@@ -511,8 +786,15 @@ export class Scene {
     const globalSpeed = 1 + Math.min(n, 12) * 0.03;
     const globalAmp = 1 + Math.min(n, 12) * 0.025;
 
+    // A faint, slow breeze — just enough to lean the embers and shift the stars
+    // a hair. Kept very gentle on purpose.
+    this.wind = Math.sin(t * 0.08) * 0.5 + Math.sin(t * 0.043) * 0.3;
+
     this.paintSky();
+    this.drawNebula();
     this.drawStars();
+    this.drawShootingStars();
+    this.drawMoon();
 
     this.drawWaves();
     this.drawCampfireGlow(t, boost);
@@ -525,7 +807,9 @@ export class Scene {
   private renderStatic() {
     const ctx = this.ctx;
     this.paintSky();
+    this.drawNebula();
     this.drawStars();
+    this.drawMoon();
     const n = this.lastCount;
     const boost = 1 + Math.min(n, 12) * 0.03;
 
@@ -541,10 +825,26 @@ export class Scene {
       const sy = this.cy + o.seatHomeY * this.vmin;
       const x = sx + Math.sin(o.t * o.a + o.phase) * ampX * o.ax;
       const y = sy + Math.sin(o.t * o.b) * ampY * o.ay;
+      const headR = 1.8 * (this.typing.has(o.visitorId) ? 1.4 : 1);
       ctx.fillStyle = hsla(o.hue, 40, 80, o.baseAlpha);
       ctx.beginPath();
-      ctx.arc(x, y, 1.8, 0, Math.PI * 2);
+      ctx.arc(x, y, headR, 0, Math.PI * 2);
       ctx.fill();
+      if (o.visitorId === this.selfId) {
+        ctx.strokeStyle = hsla(o.hue, 48, 80, 0.4 * o.baseAlpha);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(x, y, headR * 2.6, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      // Static ripple: render at full size if a nudge is pending.
+      if (o.rippleT !== undefined) {
+        ctx.strokeStyle = hsla(o.hue, 50, 75, 0.3);
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(x, y, headR * 8, 0, Math.PI * 2);
+        ctx.stroke();
+      }
     }
   }
 }
