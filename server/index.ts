@@ -212,3 +212,4 @@ function serveStatic(pathname: string): Response {
 }
 
 console.log(`campfire listening on :${PORT} (presence: ${totalConnected()})`);
+console.log(`tz: ${tzOffsetMinutes()} min (${process.env.TZ ?? "local"})`);
