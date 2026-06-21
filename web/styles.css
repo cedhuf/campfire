@@ -20,12 +20,19 @@ html, body {
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
 }
+/* On iOS PWA (black-translucent status bar), the html background fills the
+   notch area. Keep it identical to the canvas bg so the top safe area is a
+   seamless extension of the scene, not a differently-colored block. */
+html { background: var(--bg); }
 
 #scene {
   position: fixed;
   inset: 0;
   width: 100vw;
-  height: 100dvh;
+  /* svh = small viewport height. Unlike dvh, it does not grow when the
+     mobile keyboard opens — so the canvas keeps its full size and the UI
+     "lifts" over it (via --kb) instead of being crushed behind it. */
+  height: 100svh;
   display: block;
   z-index: 0;
 }
@@ -543,7 +550,7 @@ html, body {
   flex-direction: column;
   justify-content: flex-end;
   gap: 6px;
-  max-height: 46dvh;
+  max-height: 46svh;
   overflow: hidden;
   -webkit-mask-image: linear-gradient(to top, #000 72%, transparent 100%);
   mask-image: linear-gradient(to top, #000 72%, transparent 100%);
@@ -761,7 +768,7 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 40dvh;
+  max-height: 40svh;
   overflow: hidden;
 }
 .present-row {
