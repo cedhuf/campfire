@@ -1,7 +1,7 @@
 const MAX_CLASSIC = 10;
 const MAX_AIR = 10;
 const LIFETIME_CLASSIC = 50_000;
-const LIFETIME_AIR = 26_000;
+const LIFETIME_AIR = 40_000;
 
 import { hueForVisitor, hsla } from "./color";
 
@@ -102,6 +102,11 @@ export class Chat {
     const leftPct = 50 + (Math.random() * 2 - 1) * 20; // 30%..70%
     el.style.left = leftPct + "%";
     this.air.appendChild(el);
+    // Rise range: full on desktop, clamped on mobile (smaller viewport, keep
+    // the message clear of the daybar/brackets at the top).
+    const coarse = window.matchMedia("(pointer: coarse)").matches;
+    const riseMin = coarse ? 22 : 28;
+    const riseMax = coarse ? 28 : 38;
     const entry: MsgEl = {
       el,
       bornAt: performance.now(),
@@ -109,7 +114,7 @@ export class Chat {
       dead: false,
       mode: "air",
       drift: (Math.random() * 2 - 1) * 8,
-      rise: 14 + Math.random() * 7,
+      rise: riseMin + Math.random() * (riseMax - riseMin),
     };
     this.messages.push(entry);
     while (this.messages.length > MAX_AIR) {
@@ -149,8 +154,8 @@ export class Chat {
       const p = Math.min(age / LIFETIME_AIR, 1);
       // ease in, hold, ease out
       let op: number;
-      if (p < 0.12) op = p / 0.12;
-      else if (p > 0.58) op = (1 - p) / 0.42;
+      if (p < 0.10) op = p / 0.10;
+      else if (p > 0.65) op = (1 - p) / 0.35;
       else op = 1;
       const ty = -p * entry.rise; // vh, rises upward
       const tx = entry.drift * p; // gentle horizontal sway

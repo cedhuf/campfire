@@ -538,7 +538,7 @@ html, body {
 }
 .air-msg {
   position: absolute;
-  top: 64%;
+  top: 70%;
   left: 50%;
   transform: translateX(-50%);
   max-width: min(78vw, 460px);
