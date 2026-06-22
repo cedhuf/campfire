@@ -194,7 +194,9 @@ export class Scene {
     this.canvas.style.width = this.w + "px";
     this.canvas.style.height = this.h + "px";
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    this.vmin = Math.min(this.w, this.h) / 100;
+    // Floor the unit on small screens so the campfire, pastilles and other
+    // elements don't shrink so hard on phones (portrait vmin is tiny).
+    this.vmin = Math.max(Math.min(this.w, this.h) / 100, 5);
     this.cx = this.w * 0.5;
     this.cy = this.h * 0.58;
     for (const o of this.oscs.values()) o.trail = [];
@@ -419,12 +421,7 @@ export class Scene {
   // Falls back to a flat vector disc until the texture loads. Fades with night.
   private drawMoon(): void {
     const vis = this.theme.star;
-    if (vis <= 0.12) return;
-    const ctx = this.ctx;
-    const t = this.elapsed;
-    const R = 4.4 * this.vmin;
-    const mx = this.w * 0.7 + Math.sin(t * 0.018) * 1.6 * this.vmin;
-    const my = this.h * 0.15 + Math.sin(t * 0.05 + 1) * 0.7 * this.vmin;
+    if (vis <= 0.25) return; // hidden through daylight
 
     // Synodic month phase in [0,1): 0 = new, 0.5 = full. Anchored on a known
     // new moon (2000-01-06 18:14 UTC). Date-level precision is plenty here.
@@ -434,8 +431,35 @@ export class Scene {
     const illum = (1 - Math.cos(phase * Math.PI * 2)) / 2; // lit fraction 0..1
     if (illum < 0.04) return; // nothing to draw around the new moon
 
+    const ctx = this.ctx;
+    const R = Math.min(this.w, this.h) * 0.058;
+
+    // Night progress (theme-space: sunset 0.76 -> next sunrise 0.28) drives a
+    // slow, slightly elliptical arc across the whole sky, left to right.
+    const f = this.theme.frac;
+    const p = Math.max(0, Math.min(1, (f >= 0.76 ? f - 0.76 : f + 0.24) / 0.52));
+    const arcX = (q: number) => this.w * (0.1 + 0.8 * q);
+    const arcY = (q: number) => this.h * 0.34 - this.h * 0.18 * Math.sin(q * Math.PI);
+    const mx = arcX(p);
+    const my = arcY(p);
+
+    // Faint trajectory trace (start -> end of the night's path).
+    ctx.save();
+    ctx.strokeStyle = `rgba(210, 214, 226, ${0.09 * vis})`;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2, 6]);
+    ctx.beginPath();
+    for (let i = 0; i <= 48; i++) {
+      const x = arcX(i / 48);
+      const y = arcY(i / 48);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.restore();
+
     // Soft halo, breathing slightly and dimmed by how little of the disc is lit.
-    const breathe = 0.85 + 0.15 * Math.sin(t * 0.6);
+    const breathe = 0.85 + 0.15 * Math.sin(this.elapsed * 0.6);
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
     const halo = ctx.createRadialGradient(mx, my, R * 0.5, mx, my, R * 2.9);
@@ -456,9 +480,10 @@ export class Scene {
       ctx.globalAlpha = Math.min(1, vis * 1.15);
       ctx.drawImage(this.moonImg, mx - draw / 2, my - draw / 2, draw, draw);
       ctx.globalAlpha = 1;
-      // Earthshine: dim (not erase) the unlit region along the terminator.
-      this.tracePhase(mx, my, R, phase, false);
-      ctx.fillStyle = "rgba(3, 4, 9, 0.84)";
+      // Earthshine: dim the unlit region, expanded past the limb so no lit rim
+      // spills along the edge (the clip trims the overshoot).
+      this.tracePhase(mx, my, R * 1.07, phase, false);
+      ctx.fillStyle = "rgba(3, 4, 9, 0.88)";
       ctx.fill();
       ctx.restore();
     } else {

@@ -528,7 +528,11 @@ setInterval(tickTime, 1000);
 if (window.visualViewport) {
   const vv = window.visualViewport;
   const updateKb = () => {
-    const kb = Math.max(0, window.innerHeight - vv.height);
+    // Only treat a large gap as the keyboard. In an installed PWA the
+    // innerHeight/visualViewport delta is a constant ~safe-area offset at rest,
+    // which would otherwise double the bottom inset and lift the bar too high.
+    const gap = window.innerHeight - vv.height;
+    const kb = gap > 110 ? gap : 0;
     document.documentElement.style.setProperty("--kb", kb + "px");
   };
   vv.addEventListener("resize", updateKb);
